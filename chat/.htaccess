@@ -1,0 +1,4 @@
+RewriteEngine On
+
+# /chat/ROOM/manage → /chat/manage.php?room=ROOM
+RewriteRule ^([A-Za-z0-9_-]+)/manage/?$ manage.php?room=$1 [L,QSA,END]
