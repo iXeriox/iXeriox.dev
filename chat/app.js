@@ -1526,6 +1526,7 @@ createApp({
             */
 
             socket.on("rooms", data => {
+                console.log(data);
                 availableRooms.value = Array.isArray(data) ? data : (data.rooms || []);
                 console.log("[CHAT] Available rooms:", data);
             });

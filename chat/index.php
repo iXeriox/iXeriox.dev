@@ -562,45 +562,42 @@ session_start();
 
     </div>
 
-    <div class="join-room-list">
+<div class="join-room-list">
+  <template v-for="room in availableRooms" :key="room.name">
+    <div
+      v-if="room.visibility === 'private_users' && room.metadata?.iXChat"
+      class="join-room-card"
+    >
+      <div class="join-room-info">
+        <h3>#{{ room.chatTitle || room.name }}</h3>
 
-        <div
-            v-for="room in filteredRooms"
-            :key="room.name"
-            class="join-room-card"
-        >
+        <small>
+          {{ room }}
+        </small>
+      </div>
 
-            <div class="join-room-info">
-
-                <h3>#{{ room.roomName }}</h3>
-
-                <small>
-                    {{ room.chatType || "Public Room" }}
-                </small>
-
-            </div>
-
-            <button
-                class="join-button"
-                :class="{joined: isRoomJoined(room.name)}"
-                :disabled="isRoomJoined(room.name)"
-                @click="joinRoom(room.name)"
-            >
-                {{ isRoomJoined(room.name) ? "Joined" : "Join" }}
-            </button>
-
-        </div>
-
-        <div
-            v-if="filteredRooms.length===0"
-            class="empty-search"
-        >
-
-            No rooms found.
-
-        </div>
-
+      <button
+        class="join-button"
+        :class="{ joined: isRoomJoined(room.name) }"
+        :disabled="isRoomJoined(room.name)"
+        @click="joinRoom(room.name)"
+      >
+        {{ isRoomJoined(room.name) ? "Joined" : "Join" }}
+      </button>
     </div>
+  </template>
+
+  <div
+    v-if="
+      !availableRooms.some(
+        room => room.visibility === 'private_users' && room.metadata?.iXChat
+      )
+    "
+    class="empty-search"
+  >
+    No rooms found.
+  </div>
+</div>
 
             <!-- ========================================================= -->
             <!-- PERMISSIONS PANEL -->
