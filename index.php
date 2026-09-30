@@ -1211,6 +1211,7 @@ flex-wrap:wrap;
 
 
 .hero-actions button,
+.hero-actions .discord-button,
 .modal button{
 
 
@@ -1236,6 +1237,8 @@ padding:
 
 cursor:pointer;
 
+text-decoration:none;
+
 
 transition:.25s;
 
@@ -1245,6 +1248,7 @@ transition:.25s;
 
 
 .hero-actions button:hover,
+.hero-actions .discord-button:hover,
 .modal button:hover{
 
 
@@ -1253,6 +1257,16 @@ background:var(--amber);
 color:var(--bg);
 
 
+}
+
+.hero-actions .discord-button{
+    border-color:#5865f2;
+    color:#aeb4ff;
+}
+
+.hero-actions .discord-button:hover{
+    background:#5865f2;
+    color:#fff;
 }
 
 
@@ -3948,6 +3962,137 @@ letter-spacing:.1em;
         padding: 1.25rem;
     }
 }
+
+/* Reviews and community */
+.reviews-section{
+    position:relative;
+}
+
+.reviews-heading{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:2rem;
+    margin-bottom:2rem;
+}
+
+.reviews-heading h3{
+    margin-top:.65rem;
+    font-size:clamp(1.65rem,4vw,2.5rem);
+}
+
+.reviews-heading > p{
+    max-width:390px;
+    color:var(--muted);
+    line-height:1.7;
+    text-align:right;
+}
+
+.reviews-panel{
+    display:grid;
+    grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);
+    gap:1px;
+    overflow:hidden;
+    border:1px solid var(--border);
+    border-radius:18px;
+    background:var(--border);
+    box-shadow:0 24px 80px rgba(0,0,0,.22);
+}
+
+.reviews-copy{
+    padding:clamp(1.6rem,4vw,3rem);
+    background:linear-gradient(135deg,rgba(17,24,35,.98),rgba(10,14,20,.98));
+}
+
+.reviews-prompt{
+    color:var(--cyan);
+    font:700 .7rem var(--mono);
+    letter-spacing:.16em;
+}
+
+.reviews-copy h4{
+    max-width:570px;
+    margin:.8rem 0 1rem;
+    font-size:clamp(1.35rem,3vw,2rem);
+}
+
+.reviews-copy p{
+    max-width:650px;
+    color:var(--muted);
+    line-height:1.75;
+}
+
+.review-topics{
+    display:flex;
+    flex-wrap:wrap;
+    gap:.65rem;
+    margin-top:1.75rem;
+}
+
+.review-topics span{
+    padding:.45rem .7rem;
+    border:1px solid rgba(54,224,208,.2);
+    border-radius:999px;
+    color:#aebbc9;
+    font:.72rem var(--mono);
+}
+
+.discord-card{
+    display:flex;
+    align-items:center;
+    gap:1.1rem;
+    min-height:240px;
+    padding:2rem;
+    background:linear-gradient(145deg,rgba(88,101,242,.26),rgba(13,17,24,.98));
+    color:var(--text);
+    text-decoration:none;
+    transition:background .25s,box-shadow .25s;
+}
+
+.discord-card:hover{
+    background:linear-gradient(145deg,rgba(88,101,242,.42),rgba(13,17,24,.98));
+    box-shadow:inset 0 0 50px rgba(88,101,242,.08);
+}
+
+.discord-card-icon{
+    display:grid;
+    flex:0 0 52px;
+    width:52px;
+    height:52px;
+    place-items:center;
+    border-radius:16px;
+    background:#5865f2;
+    color:#fff;
+    font:700 1.5rem var(--mono);
+    box-shadow:0 10px 30px rgba(88,101,242,.35);
+}
+
+.discord-card > span:last-child{
+    display:flex;
+    min-width:0;
+    flex-direction:column;
+    gap:.4rem;
+}
+
+.discord-card small{
+    color:#aeb4ff;
+    font:700 .65rem var(--mono);
+    letter-spacing:.12em;
+}
+
+.discord-card strong{font-size:1.05rem;}
+.discord-card em{
+    overflow-wrap:anywhere;
+    color:var(--muted);
+    font:normal .72rem var(--mono);
+}
+
+@media (max-width: 760px){
+    .reviews-heading{display:block;}
+    .reviews-heading > p{margin-top:1rem;text-align:left;}
+    .reviews-panel{grid-template-columns:1fr;}
+    .discord-card{min-height:unset;}
+}
 </style>
 </head>
 
@@ -3976,7 +4121,11 @@ letter-spacing:.1em;
 
     <a href="#archive">
         ARCHIVE
-        </a>
+    </a>
+
+    <a href="#reviews">
+        REVIEWS
+    </a>
 
 
 
@@ -4211,6 +4360,16 @@ letter-spacing:.1em;
     <span>./request_project</span>
     Request a Project
 </button>
+
+<a
+    class="discord-button"
+    href="https://discord.gg/Tk7hCUrshR"
+    target="_blank"
+    rel="noopener noreferrer"
+>
+    <span>./discord</span>
+    Join the server
+</a>
 
 
 </div>
@@ -4651,6 +4810,57 @@ class="archive-item"
 
 
 
+
+
+<section id="reviews" class="reviews-section">
+
+    <div class="reviews-heading">
+        <div>
+            <span class="section-label">./reviews</span>
+            <h3>Built with people, not just pixels.</h3>
+        </div>
+
+        <p>
+            Feedback from the people and communities I build alongside.
+        </p>
+    </div>
+
+    <div class="reviews-panel">
+        <div class="reviews-copy">
+            <span class="reviews-prompt">YOUR REVIEW COULD BE NEXT</span>
+
+            <h4>Worked with me or used one of my projects?</h4>
+
+            <p>
+                I value honest feedback. Join the Discord server to share your
+                experience, talk through an idea or see what I am building next.
+            </p>
+
+            <div class="review-topics" aria-label="Suggested review topics">
+                <span>Communication</span>
+                <span>Reliability</span>
+                <span>Development</span>
+                <span>Support</span>
+            </div>
+        </div>
+
+        <a
+            class="discord-card"
+            href="https://discord.gg/Tk7hCUrshR"
+            target="_blank"
+            rel="noopener noreferrer"
+        >
+            <span class="discord-card-icon" aria-hidden="true">#</span>
+
+            <span>
+                <small>COMMUNITY &amp; REVIEWS</small>
+                <strong>Join my Discord Server</strong>
+                <em>discord.gg/Tk7hCUrshR →</em>
+            </span>
+        </a>
+    </div>
+
+</section>
 
 
 <section class="quote">
