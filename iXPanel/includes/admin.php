@@ -14,6 +14,7 @@ function handleAdminApi(): never
             'siteInfo' => readJsonFile(IXPANEL_SITE_INFO_FILE, ['visitors' => []]),
             'github' => $githubPath ? readJsonFile($githubPath) : null,
             'githubPathFound' => $githubPath ? basename($githubPath) : null,
+            'reviews' => listReviews(),
         ]);
     }
 
@@ -32,11 +33,28 @@ function handleAdminApi(): never
             'deletePen' => deletePanelPen($body),
             'saveSiteInfo' => savePanelSiteInfo($body),
             'changePassword' => changePanelPassword($body),
+            'setReviewStatus' => setPanelReviewStatus($body),
+            'deleteReview' => deletePanelReview($body),
             default => throw new RuntimeException('Unknown administration action.'),
         };
     } catch (Throwable $error) {
         jsonResponse(['success' => false, 'error' => $error->getMessage()], 400);
     }
+}
+
+function setPanelReviewStatus(array $body): never
+{
+    updateReviewStatus(
+        trim((string) ($body['id'] ?? '')),
+        trim((string) ($body['status'] ?? ''))
+    );
+    jsonResponse(['success' => true, 'message' => 'Review status updated.']);
+}
+
+function deletePanelReview(array $body): never
+{
+    deleteReview(trim((string) ($body['id'] ?? '')));
+    jsonResponse(['success' => true, 'message' => 'Review deleted.']);
 }
 
 function savePanelPen(array $body): never

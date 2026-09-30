@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#06080d">
     <meta name="robots" content="noindex,nofollow">
     <title>iXPanel | System Intelligence</title>
-    <link rel="stylesheet" href="assets/ixpanel.css">
+    <link rel="stylesheet" href="assets/ixpanel.css?v=<?= filemtime(__DIR__ . '/../assets/ixpanel.css') ?>">
 </head>
 <body>
 <div class="skeleton" data-loader><div style="text-align:center"><div class="loader"></div><div class="load-text">INITIALISING IXPANEL</div></div></div>
@@ -18,6 +18,7 @@
             <button class="nav" data-view="system"><i>□</i><span>System</span></button>
             <button class="nav" data-view="runtime"><i>&lt;/&gt;</i><span>PHP runtime</span></button>
             <button class="nav" data-view="pens"><i>P</i><span>Pens</span></button>
+            <button class="nav" data-view="reviews"><i>R</i><span>Reviews</span><b class="nav-badge" data-review-badge hidden>0</b></button>
             <button class="nav" data-view="visitors"><i>V</i><span>Site information</span></button>
             <button class="nav" data-view="github"><i>G</i><span>GitHub cache</span></button>
             <button class="nav" data-view="chat"><i>C</i><span>Chat</span></button>
@@ -69,6 +70,18 @@
             </div>
         </section>
 
+        <section class="view" data-panel="reviews" hidden>
+            <div class="summary-grid">
+                <div class="summary"><span>TOTAL REVIEWS</span><strong data-review-total>0</strong></div>
+                <div class="summary"><span>AWAITING APPROVAL</span><strong data-review-pending>0</strong></div>
+                <div class="summary"><span>PUBLISHED</span><strong data-review-approved>0</strong></div>
+            </div>
+            <article class="card">
+                <div class="card-head"><div><span class="card-label">Moderation</span><h3>Website reviews</h3></div></div>
+                <div class="review-admin-list" data-review-list></div>
+            </article>
+        </section>
+
         <section class="view" data-panel="visitors" hidden>
             <div class="summary-grid"><div class="summary"><span>TOTAL UNIQUE</span><strong data-total-unique>0</strong></div><div class="summary"><span>TODAY UNIQUE</span><strong data-today-unique>0</strong></div><div class="summary"><span>COUNTRIES</span><strong data-country-count>0</strong></div><div class="summary"><span>LAST VISIT</span><strong data-last-visit style="font-size:12px">—</strong></div></div>
             <article class="card"><div class="card-head"><div><span class="card-label">Editable source</span><h3>/Data/siteInfo.json</h3></div></div><textarea class="admin-editor" data-site-info spellcheck="false"></textarea><div class="admin-actions"><button class="admin-btn primary" data-save-site>Validate & save JSON</button></div></article>
@@ -98,6 +111,6 @@
         </section>
     </main>
 </div>
-<script src="assets/ixpanel.js" defer></script>
+<script src="assets/ixpanel.js?v=<?= filemtime(__DIR__ . '/../assets/ixpanel.js') ?>" defer></script>
 </body>
 </html>
