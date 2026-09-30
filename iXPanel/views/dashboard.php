@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#06080d">
     <meta name="robots" content="noindex,nofollow">
     <title>iXPanel | System Intelligence</title>
-    <link rel="stylesheet" href="assets/ixpanel.css">
+    <link rel="stylesheet" href="assets/ixpanel.css?v=<?= filemtime(__DIR__ . '/../assets/ixpanel.css') ?>">
 </head>
 <body>
 <div class="skeleton" data-loader><div style="text-align:center"><div class="loader"></div><div class="load-text">INITIALISING IXPANEL</div></div></div>
@@ -18,7 +18,7 @@
             <button class="nav" data-view="system"><i>□</i><span>System</span></button>
             <button class="nav" data-view="runtime"><i>&lt;/&gt;</i><span>PHP runtime</span></button>
             <button class="nav" data-view="pens"><i>P</i><span>Pens</span></button>
-            <button class="nav" data-view="reviews"><i>R</i><span>Reviews</span></button>
+            <button class="nav" data-view="reviews"><i>R</i><span>Reviews</span><b class="nav-badge" data-review-badge hidden>0</b></button>
             <button class="nav" data-view="visitors"><i>V</i><span>Site information</span></button>
             <button class="nav" data-view="github"><i>G</i><span>GitHub cache</span></button>
             <button class="nav" data-view="chat"><i>C</i><span>Chat</span></button>
@@ -111,6 +111,6 @@
         </section>
     </main>
 </div>
-<script src="assets/ixpanel.js" defer></script>
+<script src="assets/ixpanel.js?v=<?= filemtime(__DIR__ . '/../assets/ixpanel.js') ?>" defer></script>
 </body>
 </html>

@@ -74,9 +74,12 @@
         if (!admin.pens.length) list.innerHTML = '<div class="metric-sub" style="padding:18px">No pen JSON files found.</div>';
 
         const reviews = admin.reviews || [];
+        const pendingReviewCount = reviews.filter(review => review.status === "pending").length;
         set("[data-review-total]", reviews.length);
-        set("[data-review-pending]", reviews.filter(review => review.status === "pending").length);
+        set("[data-review-pending]", pendingReviewCount);
         set("[data-review-approved]", reviews.filter(review => review.status === "approved").length);
+        set("[data-review-badge]", pendingReviewCount > 99 ? "99+" : pendingReviewCount);
+        $("[data-review-badge]").hidden = pendingReviewCount === 0;
         const reviewList = $("[data-review-list]");
         reviewList.replaceChildren(...reviews.map(review => {
             const item = document.createElement("article");
