@@ -26,6 +26,37 @@ $identity = [
     "roles" => $discord["roles"] ?? []
 
 ];
+
+$reviewFile = __DIR__ . "/data/reviews.json";
+$approvedReviews = [];
+
+if (is_file($reviewFile) && is_readable($reviewFile)) {
+    $storedReviews = json_decode((string) file_get_contents($reviewFile), true);
+
+    if (is_array($storedReviews)) {
+        $approvedReviews = array_values(array_filter(
+            $storedReviews,
+            static fn($review): bool =>
+                is_array($review) && ($review["status"] ?? "") === "approved"
+        ));
+
+        usort(
+            $approvedReviews,
+            static fn(array $a, array $b): int =>
+                strcmp((string) ($b["approvedAt"] ?? ""), (string) ($a["approvedAt"] ?? ""))
+        );
+
+        $approvedReviews = array_map(
+            static fn(array $review): array => [
+                "id" => (string) ($review["id"] ?? ""),
+                "name" => (string) ($review["name"] ?? "Anonymous"),
+                "rating" => max(1, min(5, (int) ($review["rating"] ?? 5))),
+                "review" => (string) ($review["review"] ?? "")
+            ],
+            $approvedReviews
+        );
+    }
+}
 /**
  * iXeriox.dev
  * Personal developer homeground
@@ -44,6 +75,8 @@ $site = [
         "raw" => $identity,
         "visitors" => $visitorStats
     ],
+
+    "reviews" => $approvedReviews,
 
 
 "projects" => [
@@ -4021,6 +4054,23 @@ letter-spacing:.1em;
     box-shadow:0 24px 80px rgba(0,0,0,.22);
 }
 
+.published-reviews{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:1rem;
+    margin-bottom:1.25rem;
+}
+.published-review{
+    padding:1.5rem;
+    border:1px solid var(--border);
+    border-radius:16px;
+    background:rgba(17,24,35,.84);
+}
+.published-review-stars{color:var(--amber);letter-spacing:.2em;}
+.published-review-stars .muted{color:#3b414b;}
+.published-review blockquote{margin:1rem 0;color:var(--text);line-height:1.75;white-space:pre-line;}
+.published-review strong{color:var(--cyan);font:.75rem var(--mono);}
+
 .review-form-intro,
 .review-rating,
 .review-field--message,
@@ -4192,6 +4242,7 @@ letter-spacing:.1em;
     .reviews-panel{grid-template-columns:1fr;}
     .discord-card{min-height:unset;}
     .review-form{grid-template-columns:1fr;}
+    .published-reviews{grid-template-columns:1fr;}
     .review-field{grid-column:1;}
     .discord-community{align-items:flex-start;flex-direction:column;}
 }
@@ -4925,6 +4976,16 @@ class="archive-item"
         <p>
             Feedback from the people and communities I build alongside.
         </p>
+    </div>
+
+    <div v-if="reviews.length" class="published-reviews">
+        <article v-for="item in reviews" :key="item.id" class="published-review">
+            <div class="published-review-stars" :aria-label="`${item.rating} out of 5 stars`">
+                <span v-for="score in 5" :key="score" :class="{ muted: score > item.rating }">★</span>
+            </div>
+            <blockquote>{{ item.review }}</blockquote>
+            <strong>— {{ item.name }}</strong>
+        </article>
     </div>
 
     <form class="review-form" @submit.prevent="sendReview">

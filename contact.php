@@ -26,6 +26,7 @@ const MAX_FEATURE_LENGTH = 100;
 const MAX_FEATURES = 30;
 
 const RATE_LIMIT_DIR = __DIR__ . "/data/contact-ratelimit";
+const REVIEWS_FILE = __DIR__ . "/data/reviews.json";
 
 
 function jsonResponse(array $data, int $status = 200): never
@@ -472,6 +473,61 @@ function sendDiscordMessage(string $message): void
     }
 }
 
+function storePendingReview(
+    string $name,
+    string $contact,
+    int $rating,
+    string $review
+): void {
+    $directory = dirname(REVIEWS_FILE);
+    if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
+        jsonFail("Unable to store your review.", 500);
+    }
+
+    $lock = fopen(REVIEWS_FILE . ".lock", "c+");
+    if ($lock === false || !flock($lock, LOCK_EX)) {
+        if (is_resource($lock)) fclose($lock);
+        jsonFail("Unable to store your review.", 500);
+    }
+
+    try {
+        $reviews = [];
+        if (is_file(REVIEWS_FILE)) {
+            $decoded = json_decode((string) file_get_contents(REVIEWS_FILE), true);
+            if (is_array($decoded)) $reviews = $decoded;
+        }
+
+        $reviews[] = [
+            "id" => bin2hex(random_bytes(12)),
+            "name" => $name,
+            "contact" => $contact,
+            "rating" => $rating,
+            "review" => $review,
+            "status" => "pending",
+            "createdAt" => gmdate("c"),
+            "approvedAt" => null
+        ];
+
+        $temporary = tempnam($directory, ".reviews-");
+        $encoded = json_encode($reviews, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($temporary === false || $encoded === false ||
+            file_put_contents($temporary, $encoded . PHP_EOL) === false ||
+            !rename($temporary, REVIEWS_FILE)) {
+            if (is_string($temporary)) @unlink($temporary);
+            throw new RuntimeException("Could not save review data.");
+        }
+        @chmod(REVIEWS_FILE, 0640);
+    } catch (Throwable $error) {
+        error_log("Review storage error: " . $error->getMessage());
+        flock($lock, LOCK_UN);
+        fclose($lock);
+        jsonFail("Unable to store your review.", 500);
+    }
+
+    flock($lock, LOCK_UN);
+    fclose($lock);
+}
+
 
 /*
 |--------------------------------------------------------------------------
@@ -753,6 +809,10 @@ if (!$rateLimit["allowed"]) {
 }
 
 sendDiscordMessage($message);
+
+if ($formType === "review") {
+    storePendingReview($name, $email, (int) $rating, $review);
+}
 
 try {
     recordRateLimitHit(
