@@ -51,6 +51,81 @@ function readJsonFile(string $path, array $fallback = []): array
     return is_array($data) ? $data : $fallback;
 }
 
+function listReviews(): array
+{
+    $reviews = readJsonFile(IXPANEL_REVIEWS_FILE, []);
+
+    usort($reviews, static fn(array $a, array $b): int =>
+        strcmp((string) ($b['createdAt'] ?? ''), (string) ($a['createdAt'] ?? ''))
+    );
+
+    return $reviews;
+}
+
+function withReviewsLock(callable $callback): void
+{
+    ensureDataDirectories();
+    $handle = fopen(IXPANEL_REVIEWS_FILE . '.lock', 'c+');
+
+    if ($handle === false || !flock($handle, LOCK_EX)) {
+        if (is_resource($handle)) fclose($handle);
+        throw new RuntimeException('Could not lock the reviews file.');
+    }
+
+    try {
+        $callback();
+    } finally {
+        flock($handle, LOCK_UN);
+        fclose($handle);
+    }
+}
+
+function updateReviewStatus(string $id, string $status): void
+{
+    if (!in_array($status, ['approved', 'pending'], true)) {
+        throw new RuntimeException('Invalid review status.');
+    }
+
+    withReviewsLock(static function () use ($id, $status): void {
+        $reviews = listReviews();
+        $found = false;
+
+        foreach ($reviews as &$review) {
+            if (hash_equals((string) ($review['id'] ?? ''), $id)) {
+                $review['status'] = $status;
+                $review['approvedAt'] = $status === 'approved' ? gmdate('c') : null;
+                $found = true;
+                break;
+            }
+        }
+        unset($review);
+
+        if (!$found) {
+            throw new RuntimeException('The selected review does not exist.');
+        }
+
+        atomicJsonWrite(IXPANEL_REVIEWS_FILE, $reviews);
+    });
+}
+
+function deleteReview(string $id): void
+{
+    withReviewsLock(static function () use ($id): void {
+        $reviews = listReviews();
+        $filtered = array_values(array_filter(
+            $reviews,
+            static fn(array $review): bool =>
+                !hash_equals((string) ($review['id'] ?? ''), $id)
+        ));
+
+        if (count($filtered) === count($reviews)) {
+            throw new RuntimeException('The selected review does not exist.');
+        }
+
+        atomicJsonWrite(IXPANEL_REVIEWS_FILE, $filtered);
+    });
+}
+
 function githubCachePath(): ?string
 {
     foreach (['githubCache.json', 'github-cache.json', 'github.json'] as $filename) {

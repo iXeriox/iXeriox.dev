@@ -18,6 +18,7 @@
             <button class="nav" data-view="system"><i>□</i><span>System</span></button>
             <button class="nav" data-view="runtime"><i>&lt;/&gt;</i><span>PHP runtime</span></button>
             <button class="nav" data-view="pens"><i>P</i><span>Pens</span></button>
+            <button class="nav" data-view="reviews"><i>R</i><span>Reviews</span></button>
             <button class="nav" data-view="visitors"><i>V</i><span>Site information</span></button>
             <button class="nav" data-view="github"><i>G</i><span>GitHub cache</span></button>
             <button class="nav" data-view="chat"><i>C</i><span>Chat</span></button>
@@ -67,6 +68,18 @@
                 <article class="card"><div class="card-head"><div><span class="card-label">Stored pens</span><h3>Pen library</h3></div><span class="chip" data-pen-count>0 PENS</span></div><div class="admin-list" data-pen-list></div></article>
                 <article class="card"><div class="card-head"><div><span class="card-label">Editor</span><h3 data-pen-heading>Select a pen</h3></div></div><div data-pen-empty class="metric-sub">Choose a pen from the library to inspect or modify it.</div><div data-pen-editor hidden><label class="editor-label">LANGUAGE</label><input class="admin-input" data-pen-language maxlength="40"><label class="editor-label">CONTENT · MAX 500 KB</label><textarea class="admin-editor" data-pen-content spellcheck="false"></textarea><div class="admin-actions"><a class="admin-btn" data-pen-open target="_blank">Open pen</a><button class="admin-btn danger" data-delete-pen>Delete</button><button class="admin-btn primary" data-save-pen>Save pen</button></div></div></article>
             </div>
+        </section>
+
+        <section class="view" data-panel="reviews" hidden>
+            <div class="summary-grid">
+                <div class="summary"><span>TOTAL REVIEWS</span><strong data-review-total>0</strong></div>
+                <div class="summary"><span>AWAITING APPROVAL</span><strong data-review-pending>0</strong></div>
+                <div class="summary"><span>PUBLISHED</span><strong data-review-approved>0</strong></div>
+            </div>
+            <article class="card">
+                <div class="card-head"><div><span class="card-label">Moderation</span><h3>Website reviews</h3></div></div>
+                <div class="review-admin-list" data-review-list></div>
+            </article>
         </section>
 
         <section class="view" data-panel="visitors" hidden>

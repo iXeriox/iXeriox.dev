@@ -73,6 +73,52 @@
         }));
         if (!admin.pens.length) list.innerHTML = '<div class="metric-sub" style="padding:18px">No pen JSON files found.</div>';
 
+        const reviews = admin.reviews || [];
+        set("[data-review-total]", reviews.length);
+        set("[data-review-pending]", reviews.filter(review => review.status === "pending").length);
+        set("[data-review-approved]", reviews.filter(review => review.status === "approved").length);
+        const reviewList = $("[data-review-list]");
+        reviewList.replaceChildren(...reviews.map(review => {
+            const item = document.createElement("article");
+            item.className = "review-admin-item";
+
+            const top = document.createElement("div");
+            top.className = "review-admin-head";
+            const identity = document.createElement("div");
+            const name = document.createElement("strong");
+            name.textContent = review.name || "Anonymous";
+            const contact = document.createElement("small");
+            contact.textContent = review.contact || "No contact supplied";
+            identity.append(name, contact);
+            const status = document.createElement("span");
+            status.className = `chip review-status-${review.status}`;
+            status.textContent = String(review.status || "pending").toUpperCase();
+            top.append(identity, status);
+
+            const stars = document.createElement("div");
+            stars.className = "review-admin-stars";
+            stars.textContent = `${"★".repeat(Number(review.rating) || 0)}${"☆".repeat(5 - (Number(review.rating) || 0))}`;
+            const copy = document.createElement("p");
+            copy.textContent = review.review || "";
+            const date = document.createElement("small");
+            date.textContent = review.createdAt ? new Date(review.createdAt).toLocaleString() : "Unknown date";
+
+            const actions = document.createElement("div");
+            actions.className = "admin-actions";
+            const toggle = document.createElement("button");
+            toggle.className = "admin-btn primary";
+            toggle.textContent = review.status === "approved" ? "Unpublish" : "Approve & publish";
+            toggle.addEventListener("click", () => moderateReview(review.id, review.status === "approved" ? "pending" : "approved"));
+            const remove = document.createElement("button");
+            remove.className = "admin-btn danger";
+            remove.textContent = "Delete";
+            remove.addEventListener("click", () => removeReview(review.id));
+            actions.append(remove, toggle);
+            item.append(top, stars, copy, date, actions);
+            return item;
+        }));
+        if (!reviews.length) reviewList.innerHTML = '<div class="metric-sub">No reviews have been submitted yet.</div>';
+
         const visitors = admin.siteInfo?.visitors || {};
         set("[data-total-unique]", Number(visitors.totalUnique || 0).toLocaleString());
         set("[data-today-unique]", Number(visitors.today?.unique || 0).toLocaleString());
@@ -128,6 +174,21 @@
         admin = result; renderAdmin();
     }
 
+    async function moderateReview(id, status) {
+        try {
+            await adminAction("setReviewStatus", { id, status });
+            await loadAdmin();
+        } catch (error) { alert(error.message); }
+    }
+
+    async function removeReview(id) {
+        if (!confirm("Delete this review permanently?")) return;
+        try {
+            await adminAction("deleteReview", { id });
+            await loadAdmin();
+        } catch (error) { alert(error.message); }
+    }
+
     async function refresh() {
         try {
             const response = await fetch("?api=stats", { cache:"no-store" });
@@ -147,7 +208,7 @@
     document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => {
         document.querySelectorAll("[data-view]").forEach(item => item.classList.toggle("active", item === button));
         document.querySelectorAll("[data-panel]").forEach(panel => panel.hidden = panel.dataset.panel !== button.dataset.view);
-        set("[data-title]", {overview:"Command overview",system:"System information",runtime:"PHP runtime",pens:"Pen control",visitors:"Site information",github:"GitHub cache",chat:"Embedded chat",pen:"Embedded pen",account:"Administrator account"}[button.dataset.view]);
+        set("[data-title]", {overview:"Command overview",system:"System information",runtime:"PHP runtime",pens:"Pen control",reviews:"Review moderation",visitors:"Site information",github:"GitHub cache",chat:"Embedded chat",pen:"Embedded pen",account:"Administrator account"}[button.dataset.view]);
         const activePanel = document.querySelector(`[data-panel="${button.dataset.view}"]`);
         const frame = activePanel?.querySelector("iframe[data-embed-src]");
         if (frame && !frame.src) frame.src = frame.dataset.embedSrc;

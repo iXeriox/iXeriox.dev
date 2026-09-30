@@ -14,14 +14,19 @@ const MESSAGE_RATE_LIMIT_WINDOW = 300; // 5 minutes
 const PROJECT_RATE_LIMIT_MAX = 1;
 const PROJECT_RATE_LIMIT_WINDOW = 600; // 10 minutes
 
+const REVIEW_RATE_LIMIT_MAX = 1;
+const REVIEW_RATE_LIMIT_WINDOW = 3600; // 1 hour
+
 const MAX_NAME_LENGTH = 80;
 const MAX_CONTACT_LENGTH = 120;
 const MAX_PROJECT_NAME_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 4000;
+const MAX_REVIEW_LENGTH = 1500;
 const MAX_FEATURE_LENGTH = 100;
 const MAX_FEATURES = 30;
 
 const RATE_LIMIT_DIR = __DIR__ . "/data/contact-ratelimit";
+const REVIEWS_FILE = __DIR__ . "/data/reviews.json";
 
 
 function jsonResponse(array $data, int $status = 200): never
@@ -468,6 +473,61 @@ function sendDiscordMessage(string $message): void
     }
 }
 
+function storePendingReview(
+    string $name,
+    string $contact,
+    int $rating,
+    string $review
+): void {
+    $directory = dirname(REVIEWS_FILE);
+    if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
+        jsonFail("Unable to store your review.", 500);
+    }
+
+    $lock = fopen(REVIEWS_FILE . ".lock", "c+");
+    if ($lock === false || !flock($lock, LOCK_EX)) {
+        if (is_resource($lock)) fclose($lock);
+        jsonFail("Unable to store your review.", 500);
+    }
+
+    try {
+        $reviews = [];
+        if (is_file(REVIEWS_FILE)) {
+            $decoded = json_decode((string) file_get_contents(REVIEWS_FILE), true);
+            if (is_array($decoded)) $reviews = $decoded;
+        }
+
+        $reviews[] = [
+            "id" => bin2hex(random_bytes(12)),
+            "name" => $name,
+            "contact" => $contact,
+            "rating" => $rating,
+            "review" => $review,
+            "status" => "pending",
+            "createdAt" => gmdate("c"),
+            "approvedAt" => null
+        ];
+
+        $temporary = tempnam($directory, ".reviews-");
+        $encoded = json_encode($reviews, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($temporary === false || $encoded === false ||
+            file_put_contents($temporary, $encoded . PHP_EOL) === false ||
+            !rename($temporary, REVIEWS_FILE)) {
+            if (is_string($temporary)) @unlink($temporary);
+            throw new RuntimeException("Could not save review data.");
+        }
+        @chmod(REVIEWS_FILE, 0640);
+    } catch (Throwable $error) {
+        error_log("Review storage error: " . $error->getMessage());
+        flock($lock, LOCK_UN);
+        fclose($lock);
+        jsonFail("Unable to store your review.", 500);
+    }
+
+    flock($lock, LOCK_UN);
+    fclose($lock);
+}
+
 
 /*
 |--------------------------------------------------------------------------
@@ -563,6 +623,35 @@ if ($formType === "message") {
 
     $rateLimitMaximum = MESSAGE_RATE_LIMIT_MAX;
     $rateLimitWindow = MESSAGE_RATE_LIMIT_WINDOW;
+} elseif ($formType === "review") {
+    $review = cleanText((string)($data["review"] ?? ""));
+    $rating = filter_var(
+        $data["rating"] ?? null,
+        FILTER_VALIDATE_INT,
+        ["options" => ["min_range" => 1, "max_range" => 5]]
+    );
+
+    if ($review === "" || $rating === false) {
+        jsonFail("Please choose a rating and write your review.");
+    }
+
+    if (textLength($review) > MAX_REVIEW_LENGTH) {
+        jsonFail(
+            "Your review must be " . MAX_REVIEW_LENGTH .
+            " characters or fewer."
+        );
+    }
+
+    $message =
+        "New review from iXeriox.dev\n\n" .
+        "Name: {$name}\n" .
+        "Contact: {$email}\n" .
+        "Rating: {$rating}/5\n" .
+        "Visitor IP: {$clientIps["primary"]}\n\n" .
+        "Review:\n{$review}";
+
+    $rateLimitMaximum = REVIEW_RATE_LIMIT_MAX;
+    $rateLimitWindow = REVIEW_RATE_LIMIT_WINDOW;
 } elseif ($formType === "project") {
     $projectName = cleanText(
         (string)($data["projectName"] ?? "")
@@ -705,9 +794,11 @@ $rateLimit = checkRateLimit(
 );
 
 if (!$rateLimit["allowed"]) {
-    $requestName = $formType === "project"
-        ? "project requests"
-        : "messages";
+    $requestName = match ($formType) {
+        "project" => "project requests",
+        "review" => "reviews",
+        default => "messages"
+    };
 
     jsonFail(
         "Too many {$requestName}. Please try again in " .
@@ -718,6 +809,10 @@ if (!$rateLimit["allowed"]) {
 }
 
 sendDiscordMessage($message);
+
+if ($formType === "review") {
+    storePendingReview($name, $email, (int) $rating, $review);
+}
 
 try {
     recordRateLimitHit(
