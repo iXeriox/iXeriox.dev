@@ -14,10 +14,14 @@ const MESSAGE_RATE_LIMIT_WINDOW = 300; // 5 minutes
 const PROJECT_RATE_LIMIT_MAX = 1;
 const PROJECT_RATE_LIMIT_WINDOW = 600; // 10 minutes
 
+const REVIEW_RATE_LIMIT_MAX = 1;
+const REVIEW_RATE_LIMIT_WINDOW = 3600; // 1 hour
+
 const MAX_NAME_LENGTH = 80;
 const MAX_CONTACT_LENGTH = 120;
 const MAX_PROJECT_NAME_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 4000;
+const MAX_REVIEW_LENGTH = 1500;
 const MAX_FEATURE_LENGTH = 100;
 const MAX_FEATURES = 30;
 
@@ -563,6 +567,35 @@ if ($formType === "message") {
 
     $rateLimitMaximum = MESSAGE_RATE_LIMIT_MAX;
     $rateLimitWindow = MESSAGE_RATE_LIMIT_WINDOW;
+} elseif ($formType === "review") {
+    $review = cleanText((string)($data["review"] ?? ""));
+    $rating = filter_var(
+        $data["rating"] ?? null,
+        FILTER_VALIDATE_INT,
+        ["options" => ["min_range" => 1, "max_range" => 5]]
+    );
+
+    if ($review === "" || $rating === false) {
+        jsonFail("Please choose a rating and write your review.");
+    }
+
+    if (textLength($review) > MAX_REVIEW_LENGTH) {
+        jsonFail(
+            "Your review must be " . MAX_REVIEW_LENGTH .
+            " characters or fewer."
+        );
+    }
+
+    $message =
+        "New review from iXeriox.dev\n\n" .
+        "Name: {$name}\n" .
+        "Contact: {$email}\n" .
+        "Rating: {$rating}/5\n" .
+        "Visitor IP: {$clientIps["primary"]}\n\n" .
+        "Review:\n{$review}";
+
+    $rateLimitMaximum = REVIEW_RATE_LIMIT_MAX;
+    $rateLimitWindow = REVIEW_RATE_LIMIT_WINDOW;
 } elseif ($formType === "project") {
     $projectName = cleanText(
         (string)($data["projectName"] ?? "")
@@ -705,9 +738,11 @@ $rateLimit = checkRateLimit(
 );
 
 if (!$rateLimit["allowed"]) {
-    $requestName = $formType === "project"
-        ? "project requests"
-        : "messages";
+    $requestName = match ($formType) {
+        "project" => "project requests",
+        "review" => "reviews",
+        default => "messages"
+    };
 
     jsonFail(
         "Too many {$requestName}. Please try again in " .
