@@ -4010,6 +4010,105 @@ letter-spacing:.1em;
     letter-spacing:.16em;
 }
 
+.review-form{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:1rem;
+    padding:clamp(1.5rem,4vw,3rem);
+    border:1px solid var(--border);
+    border-radius:18px;
+    background:linear-gradient(135deg,rgba(17,24,35,.98),rgba(10,14,20,.98));
+    box-shadow:0 24px 80px rgba(0,0,0,.22);
+}
+
+.review-form-intro,
+.review-rating,
+.review-field--message,
+.review-form > button,
+.review-status{grid-column:1/-1;}
+
+.review-form-intro h4{
+    margin:.8rem 0 .65rem;
+    font-size:clamp(1.35rem,3vw,2rem);
+}
+
+.review-form-intro p,
+.discord-community p{color:var(--muted);line-height:1.7;}
+
+.review-rating{display:flex;gap:.65rem;margin:.5rem 0;border:0;}
+.review-rating legend,
+.review-field > span{
+    margin-bottom:.65rem;
+    color:var(--text);
+    font:700 .74rem var(--mono);
+    letter-spacing:.07em;
+    text-transform:uppercase;
+}
+.review-rating label{cursor:pointer;}
+.review-rating input{position:absolute;opacity:0;pointer-events:none;}
+.review-rating label > span{
+    display:block;
+    padding:.65rem .85rem;
+    border:1px solid var(--border);
+    border-radius:10px;
+    color:var(--muted);
+    font:700 .8rem var(--mono);
+    transition:.2s;
+}
+.review-rating label small{margin-left:.25rem;color:var(--amber);}
+.review-rating input:checked + span,
+.review-rating label:hover > span{border-color:var(--amber);background:rgba(255,173,85,.08);color:var(--text);}
+
+.review-field{display:flex;flex-direction:column;min-width:0;}
+.review-field > span small{color:var(--muted);font-weight:400;text-transform:none;}
+.review-field input,
+.review-field textarea{
+    width:100%;
+    min-height:52px;
+    padding:.9rem 1rem;
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:11px;
+    outline:0;
+    background:rgba(3,7,12,.72);
+    color:var(--text);
+    font:inherit;
+}
+.review-field textarea{min-height:150px;resize:vertical;line-height:1.6;}
+.review-field input:focus,
+.review-field textarea:focus{border-color:var(--cyan);box-shadow:0 0 0 4px rgba(54,224,208,.1);}
+.review-form > button{
+    min-height:54px;
+    border:0;
+    border-radius:11px;
+    background:linear-gradient(100deg,var(--cyan),#73f0c5);
+    color:#061312;
+    font:800 .85rem var(--mono);
+    cursor:pointer;
+}
+.review-form > button:disabled{opacity:.55;cursor:wait;}
+.review-status{padding:.85rem 1rem;border:1px solid rgba(101,255,154,.25);border-radius:10px;color:var(--green);}
+.review-status--error{border-color:rgba(255,100,100,.3);color:#ff8c8c;}
+
+.discord-community{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:2rem;
+    margin-top:1.25rem;
+    padding:1.5rem 2rem;
+    border:1px solid rgba(88,101,242,.35);
+    border-radius:16px;
+    background:linear-gradient(145deg,rgba(88,101,242,.16),rgba(13,17,24,.9));
+}
+.discord-community > div{display:grid;grid-template-columns:auto 1fr;column-gap:1rem;align-items:center;}
+.discord-community .discord-card-icon{grid-row:1/4;}
+.discord-community small{color:#aeb4ff;font:700 .65rem var(--mono);letter-spacing:.12em;}
+.discord-community h4{margin:.25rem 0;font-size:1.1rem;}
+.discord-community a{
+    flex:none;padding:.8rem 1rem;border-radius:10px;background:#5865f2;color:#fff;
+    font:700 .75rem var(--mono);text-decoration:none;
+}
+
 .reviews-copy h4{
     max-width:570px;
     margin:.8rem 0 1rem;
@@ -4092,6 +4191,9 @@ letter-spacing:.1em;
     .reviews-heading > p{margin-top:1rem;text-align:left;}
     .reviews-panel{grid-template-columns:1fr;}
     .discord-card{min-height:unset;}
+    .review-form{grid-template-columns:1fr;}
+    .review-field{grid-column:1;}
+    .discord-community{align-items:flex-start;flex-direction:column;}
 }
 </style>
 </head>
@@ -4825,40 +4927,77 @@ class="archive-item"
         </p>
     </div>
 
-    <div class="reviews-panel">
-        <div class="reviews-copy">
-            <span class="reviews-prompt">YOUR REVIEW COULD BE NEXT</span>
-
+    <form class="review-form" @submit.prevent="sendReview">
+        <div class="review-form-intro">
+            <span class="reviews-prompt">LEAVE A REVIEW</span>
             <h4>Worked with me or used one of my projects?</h4>
-
             <p>
-                I value honest feedback. Join the Discord server to share your
-                experience, talk through an idea or see what I am building next.
+                Share your honest experience below. Your review is sent
+                privately to me through Discord and will not be published
+                automatically.
             </p>
-
-            <div class="review-topics" aria-label="Suggested review topics">
-                <span>Communication</span>
-                <span>Reliability</span>
-                <span>Development</span>
-                <span>Support</span>
-            </div>
         </div>
 
-        <a
-            class="discord-card"
-            href="https://discord.gg/Tk7hCUrshR"
-            target="_blank"
-            rel="noopener noreferrer"
-        >
-            <span class="discord-card-icon" aria-hidden="true">#</span>
+        <fieldset class="review-rating">
+            <legend>Your rating</legend>
+            <label v-for="score in 5" :key="score">
+                <input
+                    v-model.number="review.rating"
+                    type="radio"
+                    name="review-rating"
+                    :value="score"
+                    required
+                >
+                <span>{{ score }}<small>★</small></span>
+            </label>
+        </fieldset>
 
-            <span>
-                <small>COMMUNITY &amp; REVIEWS</small>
-                <strong>Join my Discord Server</strong>
-                <em>discord.gg/Tk7hCUrshR →</em>
-            </span>
+        <label class="review-field">
+            <span>Your name</span>
+            <input v-model.trim="review.name" type="text" maxlength="80" required>
+        </label>
+
+        <label class="review-field">
+            <span>Email or Discord <small>(kept private)</small></span>
+            <input v-model.trim="review.email" type="text" maxlength="120" required>
+        </label>
+
+        <label class="review-field review-field--message">
+            <span>Your review</span>
+            <textarea
+                v-model.trim="review.message"
+                maxlength="1500"
+                placeholder="What did you enjoy, and what could be better?"
+                required
+            ></textarea>
+        </label>
+
+        <button type="submit" :disabled="sendingReview">
+            {{ sendingReview ? "Sending review..." : "Send review" }}
+        </button>
+
+        <p
+            v-if="reviewStatus"
+            class="review-status"
+            :class="{ 'review-status--error': !reviewStatus.success }"
+            role="status"
+        >
+            {{ reviewStatus.message }}
+        </p>
+    </form>
+
+    <aside class="discord-community">
+        <div>
+            <span class="discord-card-icon" aria-hidden="true">#</span>
+            <small>WANT TO CHAT INSTEAD?</small>
+            <h4>Join my Discord community.</h4>
+            <p>Talk projects, development, gaming and everything in between.</p>
+        </div>
+
+        <a href="https://discord.gg/Tk7hCUrshR" target="_blank" rel="noopener noreferrer">
+            Join Discord <span aria-hidden="true">→</span>
         </a>
-    </div>
+    </aside>
 
 </section>
 
@@ -5316,10 +5455,12 @@ github: {
 },
 sending:false,
 sendingProject:false,
+sendingReview:false,
 visitors: SITE_DATA.visitors,
 
 contactStatus:"",
 projectRequestStatus:"",
+reviewStatus:null,
 
 contact:{
 
@@ -5327,6 +5468,12 @@ contact:{
     email:"",
     message:""
 
+},
+review:{
+    name:"",
+    email:"",
+    rating:null,
+    message:""
 },
 projectRequest:{
 
@@ -5530,6 +5677,50 @@ async sendMessage()
     }
     finally {
         this.sending = false;
+    }
+},
+async sendReview()
+{
+    this.sendingReview = true;
+    this.reviewStatus = null;
+
+    try {
+        const response = await fetch("/contact.php", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            body: JSON.stringify({
+                formType: "review",
+                name: this.review.name,
+                email: this.review.email,
+                rating: this.review.rating,
+                review: this.review.message
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `Review failed (${response.status}).`);
+        }
+
+        this.reviewStatus = {
+            success: true,
+            message: "Thanks — your review was sent successfully ✓"
+        };
+        this.review = {name: "", email: "", rating: null, message: ""};
+    }
+    catch (error) {
+        console.error("Review submission failed:", error);
+        this.reviewStatus = {
+            success: false,
+            message: error?.message || "Unable to send your review."
+        };
+    }
+    finally {
+        this.sendingReview = false;
     }
 },
 toggleProjectFeature(feature)
