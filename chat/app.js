@@ -336,7 +336,19 @@ createApp({
 
         const showJoinDialog = ref(false);
         const showMobileUsers = ref(false);
+        const mobileUsersDialog = ref(null);
+        watch(showMobileUsers, async open => {
+            await nextTick();
+            const dialog = mobileUsersDialog.value;
+            if (!dialog) return;
+            if (showMobileUsers.value && open && !dialog.open) dialog.showModal();
+            else if (!showMobileUsers.value && dialog.open) dialog.close();
+        });
+        function closeMobileUsersOnDesktop() {
+            if (window.innerWidth > 800) showMobileUsers.value = false;
+        }
         watch(currentRoom, () => { showMobileUsers.value = false; });
+        watch(username, () => { showMobileUsers.value = false; });
         const roomSearch = ref("");
         const profileImagesLoaded = ref({});
 
@@ -2146,6 +2158,7 @@ createApp({
         */
 
         onMounted(() => {
+            window.addEventListener("resize", closeMobileUsersOnDesktop);
             window.addEventListener("offline", handleBrowserOffline);
             window.addEventListener("online", handleBrowserOnline);
             window.addEventListener("message", handleDiscordAuthMessage);
@@ -2193,6 +2206,7 @@ createApp({
         });
 
         onBeforeUnmount(() => {
+            window.removeEventListener("resize", closeMobileUsersOnDesktop);
             window.removeEventListener("offline", handleBrowserOffline);
             window.removeEventListener("online", handleBrowserOnline);
             window.removeEventListener("message", handleDiscordAuthMessage);
@@ -2237,6 +2251,7 @@ createApp({
             inARoom,
             showJoinDialog,
             showMobileUsers,
+            mobileUsersDialog,
             roomSearch,
             filteredRooms,
             joinRoom,

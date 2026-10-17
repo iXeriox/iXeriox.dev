@@ -1849,7 +1849,7 @@ header {
 
 
 /* Hidden on desktop; the existing sidebar remains unchanged. */
-.mobile-room-bar {
+.mobile-users-button {
     display:none;
 }
 
@@ -3431,30 +3431,10 @@ select:focus-visible {
         min-height:32px;
     }
 
-    .mobile-room-bar {
-        display:flex;
-        flex-shrink:0;
+    .mobile-users-button {
+        display:inline-flex;
         align-items:center;
-        justify-content:space-between;
-        gap:10px;
-        padding:4px 10px;
-        border-bottom:1px solid var(--border);
-        font:12px var(--mono);
-    }
-
-    .mobile-room-bar > span {
-        min-width:0;
-        overflow:hidden;
-        white-space:nowrap;
-        text-overflow:ellipsis;
-        color:var(--muted);
-    }
-
-    .mobile-room-bar button {
-        display:flex;
-        flex-shrink:0;
-        align-items:center;
-        gap:6px;
+        justify-content:center;
         min-height:44px;
         padding:6px 10px;
         border:1px solid var(--border);
@@ -3465,21 +3445,10 @@ select:focus-visible {
         cursor:pointer;
     }
 
-    .mobile-room-bar button:focus-visible {
+    .mobile-users-button:focus-visible,
+    .mobile-users-heading button:focus-visible {
         outline:2px solid var(--accent);
         outline-offset:2px;
-    }
-
-    .users.mobile-open {
-        display:block;
-        position:absolute;
-        inset:0;
-        z-index:5;
-        width:100%;
-        padding:16px;
-        border-left:0;
-        background:var(--panel);
-        overscroll-behavior:contain;
     }
 
     .messages {
@@ -3596,5 +3565,76 @@ select:focus-visible {
     .container > header { flex-wrap:nowrap; margin-bottom:4px; padding-bottom:4px; }
     .status { width:auto; justify-content:flex-end; }
     .container { padding-top:4px; }
-    .mobile-room-bar { padding-top:0; padding-bottom:0; }
+}
+
+/* A native modal sits above the chat's clipped and blurred panels. */
+.mobile-users-dialog {
+    width:min(340px, calc(100vw - 32px));
+    max-height:70dvh;
+    margin:auto;
+    padding:0;
+    border:1px solid var(--border);
+    border-radius:16px;
+    background:var(--panel);
+    color:var(--text);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+}
+
+.mobile-users-dialog[open] {
+    display:flex;
+    flex-direction:column;
+}
+
+.mobile-users-dialog::backdrop {
+    background:rgba(0,0,0,.65);
+}
+
+.mobile-users-heading {
+    display:flex;
+    flex-shrink:0;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:16px;
+    border-bottom:1px solid var(--border);
+}
+
+.mobile-users-heading h2 {
+    font:700 16px var(--mono);
+    color:var(--accent);
+}
+
+.mobile-users-heading p {
+    margin-top:6px;
+    color:var(--muted);
+    font-size:12px;
+    overflow-wrap:anywhere;
+}
+
+.mobile-users-heading button {
+    flex-shrink:0;
+    width:44px;
+    height:44px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--panel-light);
+    color:var(--text);
+    font-size:24px;
+    cursor:pointer;
+}
+
+.mobile-users-list {
+    min-height:0;
+    padding:16px;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+}
+
+.mobile-user-avatar {
+    width:28px;
+    height:28px;
+    flex-shrink:0;
+    border-radius:50%;
+    object-fit:cover;
 }
