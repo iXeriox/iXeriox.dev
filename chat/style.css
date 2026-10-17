@@ -1848,6 +1848,11 @@ header {
 
 
 
+/* Hidden on desktop; the existing sidebar remains unchanged. */
+.mobile-room-bar {
+    display:none;
+}
+
 /* MOBILE */
 
 
@@ -3349,4 +3354,247 @@ select:focus-visible {
     .perm-permission-grid {
         grid-template-columns:1fr;
     }
+}
+
+/* Compact chat layout. Desktop rules above remain unchanged. */
+@media (max-width:800px) {
+    :root {
+        --banner-height:64px;
+    }
+
+    .build-banner {
+        height:var(--banner-height);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:8px max(12px, env(safe-area-inset-left));
+        font-size:12px;
+        line-height:1.35;
+    }
+
+    .container {
+        height:calc(100dvh - var(--banner-height));
+        padding:12px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+        min-height:0;
+    }
+
+    .container > header {
+        flex-shrink:0;
+        flex-wrap:wrap;
+        gap:8px;
+        margin-bottom:10px;
+        padding-bottom:10px;
+    }
+
+    .logo {
+        font-size:20px;
+        letter-spacing:0;
+    }
+
+    .status {
+        width:100%;
+        min-width:0;
+        flex-wrap:wrap;
+        justify-content:flex-start;
+        text-align:left;
+        font-size:11px;
+    }
+
+    .status > span:not(.online):not(.offline) {
+        overflow-wrap:anywhere;
+    }
+
+    .disconnect-btn {
+        margin-left:auto;
+        min-height:44px;
+    }
+
+    .chat-panel {
+        min-width:0;
+    }
+
+    .rooms {
+        padding:6px 6px 0;
+        overscroll-behavior-x:contain;
+    }
+
+    .room-tab, .join-room-button {
+        flex-shrink:0;
+        min-height:44px;
+    }
+
+    .close-btn {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        min-width:32px;
+        min-height:32px;
+    }
+
+    .mobile-room-bar {
+        display:flex;
+        flex-shrink:0;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        padding:4px 10px;
+        border-bottom:1px solid var(--border);
+        font:12px var(--mono);
+    }
+
+    .mobile-room-bar > span {
+        min-width:0;
+        overflow:hidden;
+        white-space:nowrap;
+        text-overflow:ellipsis;
+        color:var(--muted);
+    }
+
+    .mobile-room-bar button {
+        display:flex;
+        flex-shrink:0;
+        align-items:center;
+        gap:6px;
+        min-height:44px;
+        padding:6px 10px;
+        border:1px solid var(--border);
+        border-radius:8px;
+        background:var(--panel-light);
+        color:var(--accent);
+        font:inherit;
+        cursor:pointer;
+    }
+
+    .mobile-room-bar button:focus-visible {
+        outline:2px solid var(--accent);
+        outline-offset:2px;
+    }
+
+    .users.mobile-open {
+        display:block;
+        position:absolute;
+        inset:0;
+        z-index:5;
+        width:100%;
+        padding:16px;
+        border-left:0;
+        background:var(--panel);
+        overscroll-behavior:contain;
+    }
+
+    .messages {
+        padding:12px 6px;
+        overscroll-behavior-y:contain;
+    }
+
+    .msg-user, .user-name {
+        min-width:0;
+        overflow-wrap:anywhere;
+    }
+
+    .msg-user {
+        flex-shrink:1;
+    }
+
+    .controls {
+        padding:8px;
+        gap:6px;
+    }
+
+    .controls input {
+        min-width:0;
+        padding:12px 10px;
+        font-size:16px;
+    }
+
+    .controls button {
+        min-height:44px;
+        padding:0 12px;
+    }
+
+    .controls .chat-settings-cog {
+        flex-basis:44px;
+        width:44px;
+        min-width:44px;
+        height:44px;
+        padding:0;
+    }
+
+    .login-screen {
+        overflow-y:auto;
+        align-items:flex-start;
+        padding:16px 12px max(16px, env(safe-area-inset-bottom));
+    }
+
+    .login-box.auth-card {
+        flex-shrink:0;
+        margin:auto;
+        padding:24px 20px;
+    }
+
+    .auth-card input, .join-search input, .perm-modal input, .perm-modal select {
+        font-size:16px;
+    }
+
+    .join-overlay, .perm-overlay {
+        top:var(--banner-height);
+        padding:12px;
+    }
+
+    .join-modal, .perm-modal {
+        width:100%;
+        max-width:100%;
+        max-height:calc(100dvh - var(--banner-height) - 24px);
+    }
+
+    .join-header, .join-search, .join-room-list, .perm-header, .perm-body {
+        padding:16px;
+    }
+
+    .join-room-card {
+        gap:12px;
+        padding:12px;
+    }
+
+    .join-room-info {
+        min-width:0;
+        overflow-wrap:anywhere;
+    }
+
+    .join-room-info h3 {
+        font-size:15px;
+    }
+
+    .join-button {
+        flex-shrink:0;
+        min-width:70px;
+        min-height:44px;
+        padding:10px 12px;
+    }
+
+    .modal-close {
+        flex-shrink:0;
+        min-width:44px;
+        min-height:44px;
+    }
+
+    .welcome-card {
+        max-width:100%;
+        padding:20px;
+        overflow-wrap:anywhere;
+    }
+
+    .banned-banner {
+        margin-bottom:8px;
+        padding:8px 12px;
+        font-size:12px;
+    }
+}
+
+@media (min-width:560px) and (max-width:800px) and (max-height:500px) {
+    :root { --banner-height:40px; }
+    .container > header { flex-wrap:nowrap; margin-bottom:4px; padding-bottom:4px; }
+    .status { width:auto; justify-content:flex-end; }
+    .container { padding-top:4px; }
+    .mobile-room-bar { padding-top:0; padding-bottom:0; }
 }

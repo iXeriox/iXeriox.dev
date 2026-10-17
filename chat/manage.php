@@ -87,6 +87,21 @@ $encodedRoom = json_encode(
         .loader{width:54px;height:54px;margin:0 auto 22px;border:3px solid rgba(54,224,208,.15);border-top-color:var(--cyan);border-radius:50%;animation:spin .85s linear infinite}.gate-icon{display:grid;place-items:center;width:58px;height:58px;margin:0 auto 22px;border:1px solid rgba(255,98,98,.3);border-radius:17px;background:rgba(255,98,98,.08);color:var(--red);font-size:27px;font-weight:900}.gate h2{margin:0 0 10px;font-size:24px}.gate p{margin:0;color:var(--muted);font-size:13px;line-height:1.65}.gate-actions{display:flex;justify-content:center;gap:10px;margin-top:24px}.gate-actions a,.gate-actions button{padding:11px 15px;border:1px solid var(--border);border-radius:10px;background:#111824;color:var(--text);font-weight:800;text-decoration:none}.gate-actions a{border-color:rgba(54,224,208,.25);color:var(--cyan)}
         @keyframes spin{to{transform:rotate(360deg)}}
         @media(max-width:760px){.shell{padding:16px}.workspace{grid-template-columns:1fr}.tabs{position:static;display:flex;overflow:auto}.tab{width:auto;white-space:nowrap}.tab span:last-child{display:none}.grid{grid-template-columns:1fr}.field.full{grid-column:1}.member{grid-template-columns:minmax(0,1fr) 120px}.member .icon-btn{display:none}.permission-grid{grid-template-columns:1fr}.class-head{align-items:flex-start;flex-direction:column}}
+        @media(max-width:760px){
+            .shell{padding:12px;overflow-wrap:anywhere}
+            .topbar,.panel-head,.standalone-warning{flex-wrap:wrap}
+            .workspace>*,.panel-head>*,.toggle-row>div{min-width:0}
+            .panel{padding:16px}
+            .tab{flex-shrink:0;min-height:44px}
+            .tab span:last-child{display:inline}
+            input,textarea,select,.member select{font-size:16px}
+            .member{grid-template-columns:minmax(0,1fr)}
+            .member .icon-btn{display:grid;min-height:44px}
+            .actions,.gate-actions{flex-wrap:wrap}
+            .toggle-row select{flex-shrink:0;max-width:45%}
+            .gate-card{padding:24px 18px;max-height:calc(100dvh - 48px);overflow-y:auto}
+            .toast{left:12px;right:12px;bottom:12px;max-width:none}
+        }
     </style>
 </head>
 <body>

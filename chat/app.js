@@ -335,6 +335,8 @@ createApp({
         const inARoom = computed(() => rooms.value.length > 0);
 
         const showJoinDialog = ref(false);
+        const showMobileUsers = ref(false);
+        watch(currentRoom, () => { showMobileUsers.value = false; });
         const roomSearch = ref("");
         const profileImagesLoaded = ref({});
 
@@ -2234,6 +2236,7 @@ createApp({
             currentRoomTopic,
             inARoom,
             showJoinDialog,
+            showMobileUsers,
             roomSearch,
             filteredRooms,
             joinRoom,

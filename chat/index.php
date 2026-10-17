@@ -7,7 +7,7 @@ session_start();
 <head>
 
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 
 <title>iXeriox.dev | Chat</title>
 
@@ -229,7 +229,21 @@ session_start();
             <!-- MAIN -->
             <!-- ================================================= -->
 
-            <div class="chat-area">
+            <div v-if="inARoom" class="mobile-room-bar">
+                <span>#{{ currentRoomObj?.roomName || currentRoom }}</span>
+                <button
+                    type="button"
+                    :aria-expanded="showMobileUsers"
+                    aria-controls="room-users"
+                    @click="showMobileUsers = !showMobileUsers"
+                    @keydown.esc="showMobileUsers = false"
+                >
+                    {{ showMobileUsers ? 'Hide users' : 'Users' }}
+                    <span class="users-total">{{ roomMemberCount(currentRoom) }}</span>
+                </button>
+            </div>
+
+            <div class="chat-area" @keydown.esc="showMobileUsers = false">
 
                 <!-- NO ROOM OPEN -->
 
@@ -418,7 +432,7 @@ session_start();
                     <!-- USERS — grouped by privilege class -->
                     <!-- ================================================= -->
 
-                    <aside class="users">
+                    <aside id="room-users" class="users" :class="{ 'mobile-open': showMobileUsers }" aria-label="Room users">
 
                         <h3>
                             USERS
