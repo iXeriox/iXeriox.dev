@@ -115,32 +115,34 @@ session_start();
                     {{ classMeta(myClass).label }}
                 </span>
 
-                <button
-                    type="button"
-                    class="sound-toggle"
-                    :aria-pressed="soundEnabled"
-                    :title="soundEnabled ? 'Mute background message alerts' : 'Enable background message alerts'"
-                    @click="toggleSound"
-                >Sound {{ soundEnabled ? 'on' : 'off' }}</button>
+                <div class="status-actions">
+                    <button
+                        type="button"
+                        class="sound-toggle"
+                        :aria-pressed="soundEnabled"
+                        :title="soundEnabled ? 'Mute background message alerts' : 'Enable background message alerts'"
+                        @click="toggleSound"
+                    >Sound {{ soundEnabled ? 'on' : 'off' }}</button>
 
-                <button
-                    v-if="inARoom"
-                    type="button"
-                    class="mobile-users-button"
-                    aria-haspopup="dialog"
-                    aria-controls="mobile-users-dialog"
-                    :aria-expanded="showMobileUsers"
-                    @click="showMobileUsers = true"
-                >
-                    Users ({{ roomMemberCount(currentRoom) }})
-                </button>
+                    <button
+                        v-if="inARoom"
+                        type="button"
+                        class="mobile-users-button"
+                        aria-haspopup="dialog"
+                        aria-controls="mobile-users-dialog"
+                        :aria-expanded="showMobileUsers"
+                        @click="showMobileUsers = true"
+                    >
+                        Users ({{ roomMemberCount(currentRoom) }})
+                    </button>
 
-                <button
-                    class="disconnect-btn"
-                    @click="logout"
-                >
-                    Disconnect
-                </button>
+                    <button
+                        class="disconnect-btn"
+                        @click="logout"
+                    >
+                        Disconnect
+                    </button>
+                </div>
 
             </div>
 
