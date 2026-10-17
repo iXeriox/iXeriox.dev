@@ -2,6 +2,7 @@ const { createApp, ref, computed, watch, onMounted, onBeforeUnmount, nextTick } 
 
 const SOCKET_URL = "https://api.infini9.net:3001";
 const USERNAME_STORAGE_KEY = "ixeriox_username";
+const SOUND_STORAGE_KEY = "ixeriox_chat_sound";
 const CHAT_USER_COOKIE = "ixeriox_chat_user";
 const PUBLIC_ROOM_ID = "iXPublic";
 const DISCORD_AUTH_URL = "/auth/discord";
@@ -539,6 +540,61 @@ createApp({
         let manageChannel = null;
         let reconnectRoomIds = new Set();
         let reconnectTargetRoom = null;
+        const soundEnabled = ref((() => {
+            try { return localStorage.getItem(SOUND_STORAGE_KEY) !== "off"; }
+            catch (_) { return true; }
+        })());
+        let notificationAudio = null;
+        let lastSoundAt = -Infinity;
+
+        function unlockNotificationAudio() {
+            if (!soundEnabled.value) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                notificationAudio ??= new AudioContext();
+                if (notificationAudio.state !== "running" && notificationAudio.state !== "closed") {
+                    notificationAudio.resume().catch(() => {});
+                }
+            } catch (_) {
+                // Audio support and autoplay permissions vary by browser.
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled.value = !soundEnabled.value;
+            try {
+                localStorage.setItem(SOUND_STORAGE_KEY, soundEnabled.value ? "on" : "off");
+            } catch (_) {}
+            if (soundEnabled.value) unlockNotificationAudio();
+        }
+
+        function playMessageAlert() {
+            if (!soundEnabled.value || !notificationAudio ||
+                notificationAudio.state !== "running" ||
+                (!document.hidden && document.hasFocus()) ||
+                performance.now() - lastSoundAt < 1000) return;
+
+            lastSoundAt = performance.now();
+            try {
+                const start = notificationAudio.currentTime;
+                for (const [offset, frequency] of [[0, 660], [.12, 880]]) {
+                    const tone = notificationAudio.createOscillator();
+                    const volume = notificationAudio.createGain();
+                    tone.frequency.value = frequency;
+                    volume.gain.setValueAtTime(0, start + offset);
+                    volume.gain.linearRampToValueAtTime(.12, start + offset + .01);
+                    volume.gain.exponentialRampToValueAtTime(.001, start + offset + .16);
+                    tone.connect(volume);
+                    volume.connect(notificationAudio.destination);
+                    tone.onended = () => { tone.disconnect(); volume.disconnect(); };
+                    tone.start(start + offset);
+                    tone.stop(start + offset + .18);
+                }
+            } catch (_) {
+                // A suspended audio device must not interrupt message delivery.
+            }
+        }
 
         function isSocketReady() {
             return !!socket?.connected && connected.value;
@@ -1419,6 +1475,8 @@ createApp({
 
             socket = io(SOCKET_URL, {
                 transports: ["websocket", "polling"],
+                tryAllTransports: true,
+                closeOnBeforeunload: false,
                 reconnection: true,
                 reconnectionAttempts: Infinity,
                 reconnectionDelay: 1000,
@@ -1871,6 +1929,12 @@ createApp({
                 messagesByRoom.value[room].push(incomingMessage);
 
                 const senderId = String(data.senderId || data.senderInfo?.id || "");
+                const isOwnMessage = senderId === String(userId.value || discordIdentity.value?.id || username.value) ||
+                    (!userId.value && data.senderInfo?.displayName === username.value);
+                if (!isSystem && senderId && !isOwnMessage &&
+                    rooms.value.some(item => item.name === room)) {
+                    playMessageAlert();
+                }
                 if (room !== currentRoom.value && senderId !== String(userId.value || "")) {
                     const nextState = messageMentionsCurrentUser(data) ? "mention" : "unread";
                     roomActivity.value = {
@@ -1997,11 +2061,22 @@ createApp({
         }
 
         function handleBrowserOnline() {
-            if (!username.value) return;
+            recoverConnection();
+        }
 
-            connectionError.value = "Network restored. Reconnecting…";
+        function recoverConnection() {
+            // Keep the existing socket/session. Do not revive rejected logins,
+            // server-initiated disconnects, or deliberate logouts.
+            if (!username.value || navigator.onLine === false || !socket?.active || socket.connected) return;
+            connectionError.value = "Reconnecting…";
             connecting.value = true;
-            connectSocket();
+            socket.connect();
+        }
+
+        function handlePageResume() {
+            if (document.hidden) return;
+            if (notificationAudio) unlockNotificationAudio();
+            recoverConnection();
         }
 
         /*
@@ -2158,6 +2233,11 @@ createApp({
         */
 
         onMounted(() => {
+            document.addEventListener("pointerdown", unlockNotificationAudio);
+            document.addEventListener("keydown", unlockNotificationAudio);
+            document.addEventListener("visibilitychange", handlePageResume);
+            window.addEventListener("focus", handlePageResume);
+            window.addEventListener("pageshow", handlePageResume);
             window.addEventListener("resize", closeMobileUsersOnDesktop);
             window.addEventListener("offline", handleBrowserOffline);
             window.addEventListener("online", handleBrowserOnline);
@@ -2206,6 +2286,12 @@ createApp({
         });
 
         onBeforeUnmount(() => {
+            document.removeEventListener("pointerdown", unlockNotificationAudio);
+            document.removeEventListener("keydown", unlockNotificationAudio);
+            document.removeEventListener("visibilitychange", handlePageResume);
+            window.removeEventListener("focus", handlePageResume);
+            window.removeEventListener("pageshow", handlePageResume);
+            notificationAudio?.close().catch(() => {});
             window.removeEventListener("resize", closeMobileUsersOnDesktop);
             window.removeEventListener("offline", handleBrowserOffline);
             window.removeEventListener("online", handleBrowserOnline);
@@ -2235,6 +2321,8 @@ createApp({
             logout,
 
             connected,
+            soundEnabled,
+            toggleSound,
             connecting,
             connectionError,
 

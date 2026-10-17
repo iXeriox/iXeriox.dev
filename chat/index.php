@@ -116,6 +116,14 @@ session_start();
                 </span>
 
                 <button
+                    type="button"
+                    class="sound-toggle"
+                    :aria-pressed="soundEnabled"
+                    :title="soundEnabled ? 'Mute background message alerts' : 'Enable background message alerts'"
+                    @click="toggleSound"
+                >Sound {{ soundEnabled ? 'on' : 'off' }}</button>
+
+                <button
                     v-if="inARoom"
                     type="button"
                     class="mobile-users-button"

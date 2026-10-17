@@ -3633,3 +3633,18 @@ select:focus-visible {
     border-radius:50%;
     object-fit:cover;
 }
+
+.sound-toggle {
+    min-height:44px;
+    padding:6px 10px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--panel-light);
+    color:var(--muted);
+    font:inherit;
+    white-space:nowrap;
+    cursor:pointer;
+}
+
+.sound-toggle[aria-pressed="true"] { color:var(--accent); }
+.sound-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
