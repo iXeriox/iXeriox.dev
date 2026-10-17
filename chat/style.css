@@ -742,15 +742,9 @@ header {
 
 .message {
 
-    display:flex;
+    display:block;
 
-    flex-wrap:wrap;
-
-    align-items:baseline;
-
-    column-gap:8px;
-
-    row-gap:2px;
+    overflow-wrap:anywhere;
 
     padding:5px 8px;
 
@@ -758,6 +752,11 @@ header {
 
     animation: messageIn .15s ease;
 
+}
+
+.message > span:not(.msg-text),
+.message > .class-badge {
+    margin-right:8px;
 }
 
 
@@ -808,10 +807,6 @@ header {
     color:var(--text);
 
     line-height:1.6;
-
-    flex:1 1 320px;
-
-    min-width:0;
 
     word-break:break-word;
 
