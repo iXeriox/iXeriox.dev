@@ -3351,6 +3351,13 @@ select:focus-visible {
     }
 }
 
+.status-actions {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-shrink:0;
+}
+
 /* Compact chat layout. Desktop rules above remain unchanged. */
 @media (max-width:800px) {
     :root {
@@ -3397,6 +3404,20 @@ select:focus-visible {
 
     .status > span:not(.online):not(.offline) {
         overflow-wrap:anywhere;
+    }
+
+    .status-actions {
+        flex-basis:100%;
+        justify-content:flex-end;
+        gap:6px;
+    }
+
+    .status-actions > button {
+        flex-shrink:0;
+    }
+
+    .status-actions .disconnect-btn {
+        margin-left:0;
     }
 
     .disconnect-btn {
