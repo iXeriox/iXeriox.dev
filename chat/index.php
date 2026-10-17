@@ -15,7 +15,7 @@ session_start();
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=<?= rawurlencode((string)(@filemtime(__DIR__ . '/style.css') ?: time())) ?>">
 </head>
 
 <body>
@@ -114,6 +114,18 @@ session_start();
                 <span v-if="!isBanned && myClass > 0" class="my-class-tag" :class="'class-' + classMeta(myClass).tier">
                     {{ classMeta(myClass).label }}
                 </span>
+
+                <button
+                    v-if="inARoom"
+                    type="button"
+                    class="mobile-users-button"
+                    aria-haspopup="dialog"
+                    aria-controls="mobile-users-dialog"
+                    :aria-expanded="showMobileUsers"
+                    @click="showMobileUsers = true"
+                >
+                    Users ({{ roomMemberCount(currentRoom) }})
+                </button>
 
                 <button
                     class="disconnect-btn"
@@ -229,21 +241,7 @@ session_start();
             <!-- MAIN -->
             <!-- ================================================= -->
 
-            <div v-if="inARoom" class="mobile-room-bar">
-                <span>#{{ currentRoomObj?.roomName || currentRoom }}</span>
-                <button
-                    type="button"
-                    :aria-expanded="showMobileUsers"
-                    aria-controls="room-users"
-                    @click="showMobileUsers = !showMobileUsers"
-                    @keydown.esc="showMobileUsers = false"
-                >
-                    {{ showMobileUsers ? 'Hide users' : 'Users' }}
-                    <span class="users-total">{{ roomMemberCount(currentRoom) }}</span>
-                </button>
-            </div>
-
-            <div class="chat-area" @keydown.esc="showMobileUsers = false">
+            <div class="chat-area">
 
                 <!-- NO ROOM OPEN -->
 
@@ -432,7 +430,7 @@ session_start();
                     <!-- USERS — grouped by privilege class -->
                     <!-- ================================================= -->
 
-                    <aside id="room-users" class="users" :class="{ 'mobile-open': showMobileUsers }" aria-label="Room users">
+                    <aside class="users" aria-label="Room users">
 
                         <h3>
                             USERS
@@ -536,6 +534,38 @@ session_start();
 
 
             <!-- ========================================================= -->
+            <!-- MOBILE USERS POPUP -->
+            <dialog
+                id="mobile-users-dialog"
+                ref="mobileUsersDialog"
+                class="mobile-users-dialog"
+                aria-labelledby="mobile-users-title"
+                @close="showMobileUsers = false"
+                @click.self="showMobileUsers = false"
+            >
+                <div class="mobile-users-heading">
+                    <div>
+                        <h2 id="mobile-users-title">Who's in chat</h2>
+                        <p>#{{ currentRoomObj?.roomName || currentRoom }} · {{ roomMemberCount(currentRoom) }} users</p>
+                    </div>
+                    <button type="button" aria-label="Close users" autofocus @click="showMobileUsers = false">×</button>
+                </div>
+                <div class="mobile-users-list">
+                    <div v-for="group in fetchGroupedUsersForRoom(currentRoom)" :key="group.name" class="user-group">
+                        <div class="user-group-header" :class="'class-' + group.tier">
+                            <span>{{ group.label }}</span>
+                            <span class="user-group-count">{{ group.users.length }}</span>
+                        </div>
+                        <div v-for="user in group.users" :key="user.id" class="user" :class="'tier-' + group.tier">
+                            <img v-if="user.avatar" class="mobile-user-avatar" :src="user.avatar" alt="">
+                            <span v-else :class="user.status" aria-hidden="true"></span>
+                            <span class="user-name">{{ memberLabel(user) }}</span>
+                        </div>
+                    </div>
+                    <p v-if="fetchGroupedUsersForRoom(currentRoom).length === 0" class="empty-search">No users to show yet.</p>
+                </div>
+            </dialog>
+
             <!-- JOIN CHAT MODAL -->
             <!-- ========================================================= -->
 
