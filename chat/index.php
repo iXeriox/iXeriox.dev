@@ -528,25 +528,35 @@ session_start();
                                 <button type="button" @click="formatMessage('**')" :disabled="isBanned || !connected" title="Bold" aria-label="Bold"><strong>B</strong></button>
                                 <button type="button" @click="formatMessage('*')" :disabled="isBanned || !connected" title="Italic" aria-label="Italic"><em>I</em></button>
                                 <button type="button" @click="formatMessage('__')" :disabled="isBanned || !connected" title="Underline" aria-label="Underline"><u>U</u></button>
-                                <button type="button" @click="formatMessage('\n')" :disabled="isBanned || !connected" title="New line (Shift+Enter)" aria-label="Insert new line">↵</button>
+                                <button type="button" @click="toggleMultiline" :disabled="isBanned || !connected" :aria-pressed="multiline" title="Toggle multiline input" aria-label="Multiline input">↵</button>
                             </div>
-                            <textarea
-                                ref="messageInput"
-                                v-model="message"
-                                @input="sendTyping"
-                                @keydown="messageKeydown"
-                                :placeholder="isBanned ? 'You cannot send messages' : (!connected ? 'Reconnecting…' : 'Type your message...')"
-                                :disabled="isBanned || !connected"
-                                aria-label="Message"
-                                aria-describedby="message-input-help"
-                                rows="2"
-                            ></textarea>
-                            <small id="message-input-help">Enter to send · Shift+Enter for a new line</small>
+                            <div class="message-entry">
+                                <textarea v-if="multiline"
+                                    ref="messageInput"
+                                    v-model="message"
+                                    @input="sendTyping"
+                                    @keydown="messageKeydown"
+                                    :placeholder="isBanned ? 'You cannot send messages' : (!connected ? 'Reconnecting…' : 'Type your message...')"
+                                    :disabled="isBanned || !connected"
+                                    aria-label="Message"
+                                    aria-describedby="message-input-help"
+                                    rows="3"
+                                ></textarea>
+                                <input v-else
+                                    ref="messageInput"
+                                    v-model="message"
+                                    @input="sendTyping"
+                                    @keydown="messageKeydown"
+                                    :placeholder="isBanned ? 'You cannot send messages' : (!connected ? 'Reconnecting…' : 'Type your message...')"
+                                    :disabled="isBanned || !connected"
+                                    aria-label="Message"
+                                    type="text"
+                                    autocomplete="off"
+                                >
+                                <button type="submit" :disabled="isBanned || !connected">SEND &gt;</button>
+                            </div>
+                            <small v-if="multiline" id="message-input-help">Enter to send · Shift+Enter for a new line</small>
                         </div>
-
-                        <button :disabled="isBanned || !connected">
-                            SEND &gt;
-                        </button>
 
                     </form>
 
