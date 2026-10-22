@@ -3735,3 +3735,18 @@ select:focus-visible {
 .mobile-users-dialog .youtube-panel { max-height:55%; }
 @media (max-width:800px) { .users { display:none; } }
 @media (prefers-reduced-motion:reduce) { .youtube-slide-enter-active, .youtube-slide-leave-active { transition:none; } }
+
+
+/* Topics take their natural height above the independently scrolling log. */
+.messages-wrapper { display:flex; flex-direction:column; overflow-y:auto; }
+.messages-wrapper > .messages { flex:1; height:auto; }
+.chat-topic {
+    flex-shrink:0;
+    padding:14px 28px;
+    border-bottom:1px solid var(--border);
+    background:var(--panel-light);
+    color:var(--text);
+}
+.chat-topic-label { display:block; margin-bottom:6px; color:var(--accent); font:700 11px var(--mono); text-transform:uppercase; letter-spacing:1px; }
+.chat-topic-text { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; font-size:14px; }
+@media (max-width:560px) { .chat-topic { padding:12px 15px; } }

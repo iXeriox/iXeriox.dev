@@ -2607,6 +2607,7 @@ createApp({
             sendTyping,
             isUserTyping,
             messageParts,
+            styledMessageParts,
             formatWhoisDate,
             decodeProfileText,
 
