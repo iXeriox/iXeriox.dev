@@ -3669,3 +3669,39 @@ select:focus-visible {
 
 .sound-toggle[aria-pressed="true"] { color:var(--accent); }
 .sound-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+/* Text-only formatting preserves newlines without accepting message HTML. */
+.msg-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+.message-bold { font-weight:700; }
+.message-italic { font-style:italic; }
+.message-underline { text-decoration:underline; }
+.message-composer { flex:1; min-width:0; }
+.formatting-toolbar { display:flex; gap:6px; margin-bottom:6px; }
+.controls .formatting-toolbar button {
+    min-width:36px;
+    min-height:36px;
+    padding:4px 10px;
+    color:var(--text);
+    background:var(--panel-light);
+    border:1px solid var(--border);
+    border-radius:6px;
+}
+.controls { align-items:center; }
+.controls textarea {
+    display:block;
+    box-sizing:border-box;
+    width:100%;
+    min-height:64px;
+    max-height:200px;
+    resize:vertical;
+    padding:10px;
+    background:rgba(0,0,0,.4);
+    border:1px solid var(--border);
+    border-radius:10px;
+    color:var(--text);
+    font:inherit;
+}
+.controls textarea:focus-visible,
+.controls .formatting-toolbar button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.message-composer small { display:block; margin-top:4px; color:var(--muted); font-size:11px; }
+.controls textarea:disabled { opacity:.5; }
