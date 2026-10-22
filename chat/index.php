@@ -555,7 +555,7 @@ session_start();
                                 >
                                 <button type="submit" :disabled="isBanned || !connected">SEND &gt;</button>
                             </div>
-                            <small v-if="multiline" id="message-input-help">Enter to send · Shift+Enter for a new line</small>
+                            <small v-if="multiline" id="message-input-help">Enter for a new line · Shift+Enter to send</small>
                         </div>
 
                     </form>

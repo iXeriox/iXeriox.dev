@@ -2219,7 +2219,7 @@ createApp({
 
         function messageKeydown(event) {
             if (event.isComposing || event.keyCode === 229) return;
-            if (event.key === "Enter" && (!multiline.value || !event.shiftKey)) {
+            if (event.key === "Enter" && (!multiline.value || event.shiftKey)) {
                 event.preventDefault();
                 sendMessage();
             }

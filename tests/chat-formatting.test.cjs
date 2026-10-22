@@ -54,16 +54,16 @@ test('empty selection and disabled editor', () => {
     assert.equal(state.message.value,'a**b');
 });
 
-test('Enter sends, Shift+Enter stays native, IME Enter never sends', () => {
+test('multiline Enter stays native, Shift+Enter sends, IME Enter never sends', () => {
     const state = editor('',0,0);
     state.multiline.value=true;
     let prevented=0;
     const event={key:'Enter',preventDefault(){prevented++}};
-    state.messageKeydown({...event,shiftKey:true});
-    state.messageKeydown({...event,isComposing:true});
+    state.messageKeydown(event);
+    state.messageKeydown({...event,shiftKey:true,isComposing:true});
     assert.equal(state.sent,0);
     assert.equal(prevented,0);
-    state.messageKeydown(event);
+    state.messageKeydown({...event,shiftKey:true});
     assert.equal(state.sent,1);
     assert.equal(prevented,1);
 });
