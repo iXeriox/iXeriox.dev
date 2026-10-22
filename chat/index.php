@@ -441,6 +441,7 @@ session_start();
 
                     <aside class="users" aria-label="Room users">
 
+                        <div class="users-scroll">
                         <h3>
                             USERS
                             <span class="users-total">{{ roomMemberCount(currentRoom) }}</span>
@@ -496,6 +497,26 @@ session_start();
                             No one else is here yet.
                         </div>
 
+                        </div>
+                        <Transition name="youtube-slide">
+                            <section v-if="youtubeState.current" class="youtube-panel" aria-label="Room YouTube player" @pointerdown="resetYoutubeIdle" @keydown="resetYoutubeIdle">
+                                <div class="youtube-heading">
+                                    <strong>YouTube</strong>
+                                    <button type="button" @click="closeYoutube" aria-label="Close YouTube player">×</button>
+                                </div>
+                                <div class="youtube-video" ref="youtubeDesktop"></div>
+                                <p class="youtube-title">{{ youtubeState.current.title }}</p>
+                                <p v-if="youtubeError" class="youtube-error" role="status">{{ youtubeError }} <button type="button" @click="mountYoutubePlayer">Retry</button></p>
+                                <small>Closes after 5 minutes idle</small>
+                                <div class="youtube-queue-heading">
+                                    <span>Up next · {{ youtubeState.queue.length }}</span>
+                                    <button type="button" @click="nextYoutube()" :disabled="!youtubeState.queue.length">Next</button>
+                                </div>
+                                <ol v-if="youtubeState.queue.length" class="youtube-queue">
+                                    <li v-for="(video, index) in youtubeState.queue" :key="index">{{ video.title }}</li>
+                                </ol>
+                            </section>
+                        </Transition>
                     </aside>
 
                 </template>
@@ -596,6 +617,25 @@ session_start();
                     </div>
                     <p v-if="fetchGroupedUsersForRoom(currentRoom).length === 0" class="empty-search">No users to show yet.</p>
                 </div>
+                        <Transition name="youtube-slide">
+                            <section v-if="youtubeState.current" class="youtube-panel" aria-label="Room YouTube player" @pointerdown="resetYoutubeIdle" @keydown="resetYoutubeIdle">
+                                <div class="youtube-heading">
+                                    <strong>YouTube</strong>
+                                    <button type="button" @click="closeYoutube" aria-label="Close YouTube player">×</button>
+                                </div>
+                                <div class="youtube-video" ref="youtubeMobile"></div>
+                                <p class="youtube-title">{{ youtubeState.current.title }}</p>
+                                <p v-if="youtubeError" class="youtube-error" role="status">{{ youtubeError }} <button type="button" @click="mountYoutubePlayer">Retry</button></p>
+                                <small>Closes after 5 minutes idle</small>
+                                <div class="youtube-queue-heading">
+                                    <span>Up next · {{ youtubeState.queue.length }}</span>
+                                    <button type="button" @click="nextYoutube()" :disabled="!youtubeState.queue.length">Next</button>
+                                </div>
+                                <ol v-if="youtubeState.queue.length" class="youtube-queue">
+                                    <li v-for="(video, index) in youtubeState.queue" :key="index">{{ video.title }}</li>
+                                </ol>
+                            </section>
+                        </Transition>
             </dialog>
 
             <!-- JOIN CHAT MODAL -->
