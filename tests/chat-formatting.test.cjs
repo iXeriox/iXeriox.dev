@@ -24,10 +24,10 @@ test('newlines and untrusted HTML remain text; unmatched markers stay visible', 
 });
 
 // Exercise the actual editor handlers with a textarea selection and Vue refs.
-const editorSource = source.slice(source.indexOf('        function formatMessage('), source.indexOf('        function sendMessage() {', source.indexOf('        function formatMessage(')));
+const editorSource = source.slice(source.indexOf('        function toggleMultiline('), source.indexOf('        function sendMessage() {', source.indexOf('        function toggleMultiline(')));
 function editor(value, start, end) {
     const input = { selectionStart:start, selectionEnd:end, focus() {}, setSelectionRange(a,b) { this.selectionStart=a; this.selectionEnd=b; } };
-    const state = {message:{value}, messageInput:{value:input}, isBanned:{value:false}, connected:{value:true}, nextTick:fn=>fn(), sendTyping() {}, sent:0};
+    const state = {multiline:{value:false}, message:{value}, messageInput:{value:input}, isBanned:{value:false}, connected:{value:true}, nextTick:fn=>fn(), sendTyping() {}, sent:0};
     state.sendMessage=()=>state.sent++;
     vm.createContext(state);
     vm.runInContext(editorSource, state);
@@ -44,20 +44,19 @@ test('toolbar wraps selection and restores selection inside markers', () => {
     assert.equal(state.message.value,'hello **__world__**');
 });
 
-test('empty selection, newline insertion and disabled editor', () => {
+test('empty selection and disabled editor', () => {
     const state = editor('ab',1,1);
     state.formatMessage('*');
     assert.equal(state.message.value,'a**b');
     assert.equal(state.messageInput.value.selectionStart,2);
-    state.formatMessage('\n');
-    assert.equal(state.message.value,'a*\n*b');
     state.isBanned.value=true;
     state.formatMessage('**');
-    assert.equal(state.message.value,'a*\n*b');
+    assert.equal(state.message.value,'a**b');
 });
 
 test('Enter sends, Shift+Enter stays native, IME Enter never sends', () => {
     const state = editor('',0,0);
+    state.multiline.value=true;
     let prevented=0;
     const event={key:'Enter',preventDefault(){prevented++}};
     state.messageKeydown({...event,shiftKey:true});
@@ -67,4 +66,30 @@ test('Enter sends, Shift+Enter stays native, IME Enter never sends', () => {
     state.messageKeydown(event);
     assert.equal(state.sent,1);
     assert.equal(prevented,1);
+});
+
+
+test('multiline toggles the field mode, retains selection and flattens lines on return', () => {
+    const state = editor('hello world', 6, 11);
+    assert.equal(state.multiline.value, false);
+    state.toggleMultiline();
+    assert.equal(state.multiline.value, true);
+    assert.equal(state.message.value, 'hello world');
+    assert.equal(state.messageInput.value.selectionStart, 6);
+    assert.equal(state.messageInput.value.selectionEnd, 11);
+    state.message.value = 'hello\nworld';
+    state.toggleMultiline();
+    assert.equal(state.multiline.value, false);
+    assert.equal(state.message.value, 'hello world');
+    state.connected.value = false;
+    state.toggleMultiline();
+    assert.equal(state.multiline.value, false);
+});
+
+test('single-line Enter sends even with Shift held', () => {
+    const state = editor('hello', 5, 5);
+    let prevented = false;
+    state.messageKeydown({key:'Enter', shiftKey:true, preventDefault() { prevented=true; }});
+    assert.equal(state.sent, 1);
+    assert.equal(prevented, true);
 });

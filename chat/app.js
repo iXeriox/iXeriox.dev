@@ -547,6 +547,7 @@ createApp({
         const message = ref("");
         const messageBox = ref(null);
         const messageInput = ref(null);
+        const multiline = ref(false);
 
         let socket = null;
         let typingTimeout = null;
@@ -2188,25 +2189,37 @@ createApp({
         |--------------------------------------------------------------------------
         */
 
+        function toggleMultiline() {
+            if (isBanned.value || !connected.value) return;
+            const start = messageInput.value?.selectionStart ?? message.value.length;
+            const end = messageInput.value?.selectionEnd ?? start;
+            multiline.value = !multiline.value;
+            if (!multiline.value) message.value = message.value.replace(/\r?\n/g, " ");
+            nextTick(() => {
+                messageInput.value?.focus();
+                messageInput.value?.setSelectionRange(start, end);
+            });
+        }
+
         function formatMessage(marker) {
             const input = messageInput.value;
             if (!input || isBanned.value || !connected.value) return;
             const start = input.selectionStart;
             const end = input.selectionEnd;
             const selected = message.value.slice(start, end);
-            const replacement = marker === "\n" ? "\n" : marker + selected + marker;
+            const replacement = marker + selected + marker;
             message.value = message.value.slice(0, start) + replacement + message.value.slice(end);
             nextTick(() => {
                 input.focus();
                 const selectionStart = start + marker.length;
-                input.setSelectionRange(selectionStart, selectionStart + (marker === "\n" ? 0 : selected.length));
+                input.setSelectionRange(selectionStart, selectionStart + selected.length);
             });
             sendTyping();
         }
 
         function messageKeydown(event) {
             if (event.isComposing || event.keyCode === 229) return;
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (event.key === "Enter" && (!multiline.value || !event.shiftKey)) {
                 event.preventDefault();
                 sendMessage();
             }
@@ -2391,6 +2404,8 @@ createApp({
             dismissSystemNotice,
             messageBox,
             messageInput,
+            multiline,
+            toggleMultiline,
             formatMessage,
             messageKeydown,
             sendMessage,
