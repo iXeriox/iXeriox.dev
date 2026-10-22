@@ -303,6 +303,24 @@ function serverMessageType(message) {
         : undefined;
 }
 
+// Formatting stays as text on the wire. Render only these known styles;
+// never interpret message content as HTML.
+function styledMessageParts(value, styles = {}, depth = 0) {
+    const text = String(value ?? "");
+    if (depth >= 8) return [{ text, ...styles }];
+    const pattern = /\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|\*([^*]+?)\*/g;
+    const parts = [];
+    let offset = 0;
+    for (const match of text.matchAll(pattern)) {
+        if (match.index > offset) parts.push({ text: text.slice(offset, match.index), ...styles });
+        const style = match[1] !== undefined ? "bold" : match[2] !== undefined ? "underline" : "italic";
+        parts.push(...styledMessageParts(match[1] ?? match[2] ?? match[3], { ...styles, [style]: true }, depth + 1));
+        offset = match.index + match[0].length;
+    }
+    if (offset < text.length) parts.push({ text: text.slice(offset), ...styles });
+    return parts;
+}
+
 createApp({
     setup() {
         /*
@@ -412,18 +430,14 @@ createApp({
         }
 
         function messageParts(value) {
-            const text = String(value || "");
             const currentName = username.value.trim();
-            if (!currentName) return [{ text, mention: false }];
-
             const escapedName = currentName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            return text
-                .split(new RegExp(`(${escapedName})`, "gi"))
-                .filter(part => part.length > 0)
-                .map(part => ({
-                    text: part,
-                    mention: part.toLowerCase() === currentName.toLowerCase()
-                }));
+            return styledMessageParts(value).flatMap(part => {
+                if (!currentName) return [{ ...part, mention: false }];
+                return part.text.split(new RegExp(`(${escapedName})`, "gi"))
+                    .filter(Boolean)
+                    .map(text => ({ ...part, text, mention: text.toLowerCase() === currentName.toLowerCase() }));
+            });
         }
 
         function messageMentionsCurrentUser(data) {
@@ -532,6 +546,7 @@ createApp({
         const userTyping = ref([]);
         const message = ref("");
         const messageBox = ref(null);
+        const messageInput = ref(null);
 
         let socket = null;
         let typingTimeout = null;
@@ -2173,6 +2188,30 @@ createApp({
         |--------------------------------------------------------------------------
         */
 
+        function formatMessage(marker) {
+            const input = messageInput.value;
+            if (!input || isBanned.value || !connected.value) return;
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const selected = message.value.slice(start, end);
+            const replacement = marker === "\n" ? "\n" : marker + selected + marker;
+            message.value = message.value.slice(0, start) + replacement + message.value.slice(end);
+            nextTick(() => {
+                input.focus();
+                const selectionStart = start + marker.length;
+                input.setSelectionRange(selectionStart, selectionStart + (marker === "\n" ? 0 : selected.length));
+            });
+            sendTyping();
+        }
+
+        function messageKeydown(event) {
+            if (event.isComposing || event.keyCode === 229) return;
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
         function sendMessage() {
             const text = message.value.trim();
 
@@ -2351,6 +2390,9 @@ createApp({
             systemNotices,
             dismissSystemNotice,
             messageBox,
+            messageInput,
+            formatMessage,
+            messageKeydown,
             sendMessage,
             message,
             sendTyping,

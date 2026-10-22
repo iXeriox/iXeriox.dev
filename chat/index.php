@@ -401,8 +401,7 @@ session_start();
 
                                 <span class="msg-text">
                                     <template v-for="(part, partIndex) in messageParts(msg.message)" :key="`${msg.id || index}-${partIndex}`">
-                                        <mark v-if="part.mention" class="message-mention">{{ part.text }}</mark>
-                                        <template v-else>{{ part.text }}</template>
+                                        <span :class="{'message-mention': part.mention, 'message-bold': part.bold, 'message-italic': part.italic, 'message-underline': part.underline}">{{ part.text }}</span>
                                     </template>
                                 </span>
                             </template>
@@ -524,13 +523,26 @@ session_start();
                             <span aria-hidden="true">⚙</span>
                         </button>
 
-                        <input
-                            v-model="message"
-                            @input="sendTyping"
-                            :placeholder="isBanned ? 'You cannot send messages' : (!connected ? 'Reconnecting…' : 'Type your message...')"
-                            :disabled="isBanned || !connected"
-                            autocomplete="off"
-                        >
+                        <div class="message-composer">
+                            <div class="formatting-toolbar" role="group" aria-label="Message formatting">
+                                <button type="button" @click="formatMessage('**')" :disabled="isBanned || !connected" title="Bold" aria-label="Bold"><strong>B</strong></button>
+                                <button type="button" @click="formatMessage('*')" :disabled="isBanned || !connected" title="Italic" aria-label="Italic"><em>I</em></button>
+                                <button type="button" @click="formatMessage('__')" :disabled="isBanned || !connected" title="Underline" aria-label="Underline"><u>U</u></button>
+                                <button type="button" @click="formatMessage('\n')" :disabled="isBanned || !connected" title="New line (Shift+Enter)" aria-label="Insert new line">↵</button>
+                            </div>
+                            <textarea
+                                ref="messageInput"
+                                v-model="message"
+                                @input="sendTyping"
+                                @keydown="messageKeydown"
+                                :placeholder="isBanned ? 'You cannot send messages' : (!connected ? 'Reconnecting…' : 'Type your message...')"
+                                :disabled="isBanned || !connected"
+                                aria-label="Message"
+                                aria-describedby="message-input-help"
+                                rows="2"
+                            ></textarea>
+                            <small id="message-input-help">Enter to send · Shift+Enter for a new line</small>
+                        </div>
 
                         <button :disabled="isBanned || !connected">
                             SEND &gt;
