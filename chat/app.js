@@ -125,30 +125,33 @@ function roomClassEntries(room) {
         );
 }
 
+function isRoomOwner(room, member) {
+    const ownerId = room?.owner ?? room?.raw?.owner ?? room?.raw?.rawData?.owner ?? room?.rawData?.owner;
+    return ownerId != null && member?.id != null && String(ownerId) === String(member.id);
+}
+
 function memberRoomClass(room, member) {
-    const memberId = String(member?.id || "");
-    const ownerId = String(
-        room?.owner ?? room?.raw?.owner ?? ""
-    );
-
-    if (memberId && memberId === ownerId) {
-        return "Room Owner";
-    }
-
+    const memberId = String(member?.id ?? "");
+    const classes = roomPrivilegeClasses(room);
+    // Some servers send a synthetic "Room Owner" label rather than a class.
+    // Ownership is displayed separately; real classes (including one with that
+    // name) still resolve normally.
+    const reportedClass = member?.privilegeClass ?? member?.className;
     return (
         room?.raw?.userPrivilegeClasses?.[memberId] ??
         room?.userPrivilegeClasses?.[memberId] ??
-        member?.privilegeClass ??
-        member?.className ??
+        room?.raw?.rawData?.userPrivilegeClasses?.[memberId] ??
+        room?.rawData?.userPrivilegeClasses?.[memberId] ??
+        (reportedClass === "Room Owner" && !Object.hasOwn(classes, reportedClass) ? undefined : reportedClass) ??
         room?.raw?.defaultPrivilegeClass ??
         room?.defaultPrivilegeClass ??
+        room?.raw?.rawData?.defaultPrivilegeClass ??
+        room?.rawData?.defaultPrivilegeClass ??
         "Unassigned"
     );
 }
 
 function roomClassTier(room, className) {
-    if (className === "Room Owner") return "owner";
-
     const classes = roomClassEntries(room);
     const index = classes.findIndex(
         item => item.name === className
@@ -171,9 +174,7 @@ function groupUsersByPrivilegeClass(room, members) {
         const className = memberRoomClass(room, member);
         const definition =
             roomPrivilegeClasses(room)[className];
-        const order = className === "Room Owner"
-            ? Number.POSITIVE_INFINITY
-            : Number(definition?.order || 0);
+        const order = Number(definition?.order || 0);
 
         if (!groups.has(className)) {
             groups.set(className, {
@@ -837,6 +838,7 @@ createApp({
                     room: room.name,
                     state: {
                         room: room.name,
+                        owner: room.owner,
                         roomName: room.roomName || room.name,
                         topic: room.raw?.topic || "",
                         settings: room.raw?.settings || {},
@@ -989,7 +991,7 @@ createApp({
 
             processRoomManagerPayload(
                 event.data,
-                message => event.source?.postMessage(message, event.origin)
+                message => event.source?.postMessage(JSON.parse(JSON.stringify(message)), event.origin)
             );
         }
 
@@ -1024,7 +1026,7 @@ createApp({
         function handleRoomManagerBroadcast(event) {
             processRoomManagerPayload(
                 event.data,
-                message => manageChannel?.postMessage(message)
+                message => manageChannel?.postMessage(JSON.parse(JSON.stringify(message)))
             );
         }
 
@@ -1051,12 +1053,12 @@ createApp({
                 return false;
             }
 
+            if (isRoomOwner(currentRoomObj.value, user)) {
+                return isOwnerOfCurrentRoom.value || isSiteStaff.value;
+            }
+
             if (
                 String(user.id) === String(userId.value) ||
-                memberRoomClass(
-                    currentRoomObj.value,
-                    user
-                ) === "Room Owner" ||
                 user.isStaff === true
             ) {
                 return false;
@@ -1915,11 +1917,12 @@ createApp({
                     );
 
                     if (updatedRoom && manageChannel) {
-                        manageChannel.postMessage({
+                        manageChannel.postMessage(JSON.parse(JSON.stringify({
                             type: "ixeriox:manage-state",
                             room: updatedRoom.name,
                             state: {
                                 room: updatedRoom.name,
+                                owner: updatedRoom.owner,
                                 roomName:
                                     updatedRoom.roomName ||
                                     updatedRoom.name,
@@ -1947,7 +1950,7 @@ createApp({
                                     updatedRoom.raw
                                         ?.permissions || {}
                             }
-                        });
+                        })));
                     }
                 }
             );
@@ -1981,14 +1984,7 @@ createApp({
                             []
                         ).map(m => ({
                             ...m,
-                            privilegeClass:
-                                m.privilegeClass ||
-                                (
-                                    String(m.id) ===
-                                    String(data.room.owner)
-                                        ? "Room Owner"
-                                        : null
-                                )
+                            privilegeClass: memberRoomClass({ ...data.room, raw: mergedRaw }, m)
                         }))
                     });
                 } else {
@@ -2615,6 +2611,7 @@ createApp({
             roomMemberCount,
             classMeta,
             memberLabel,
+            isRoomOwner,
 
             // Permissions
             CHAT_PERMISSION_LIST,

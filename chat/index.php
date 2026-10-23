@@ -494,6 +494,7 @@ session_start();
                                     ></span>
 
                                     <span class="user-name">{{ memberLabel(user) }}</span>
+                                    <small v-if="isRoomOwner(currentRoomObj, user)" class="room-owner-badge" title="Room owner" aria-label="Room owner">♛</small>
 
                                 </div>
 
@@ -621,6 +622,7 @@ session_start();
                             <img v-if="user.avatar" class="mobile-user-avatar" :src="user.avatar" alt="">
                             <span v-else :class="user.status" aria-hidden="true"></span>
                             <span class="user-name">{{ memberLabel(user) }}</span>
+                                    <small v-if="isRoomOwner(currentRoomObj, user)" class="room-owner-badge" title="Room owner" aria-label="Room owner">♛</small>
                         </div>
                     </div>
                     <p v-if="fetchGroupedUsersForRoom(currentRoom).length === 0" class="empty-search">No users to show yet.</p>
@@ -827,7 +829,7 @@ session_start();
 
                         <template
                             v-for="group in fetchGroupedUsersForRoom(currentRoom)"
-                            :key="group.tier"
+                            :key="group.name"
                         >
 
                             <div class="perm-group">
@@ -844,6 +846,7 @@ session_start();
                                 >
 
                                     <span class="user-name">{{ memberLabel(user) }}</span>
+                                    <small v-if="isRoomOwner(currentRoomObj, user)" class="room-owner-badge" title="Room owner" aria-label="Room owner">♛</small>
 
                                     <span class="class-badge" :class="'class-' + group.tier">
                                         {{ user.privilegeClass }}

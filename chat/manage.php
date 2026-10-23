@@ -443,11 +443,20 @@ $encodedRoom = json_encode(
                     id.className = "member-id";
                     id.textContent = member.id || "";
                     text.append(name, id);
+                    const isOwner = member.isOwner === true || (state.owner != null && String(member.id) === String(state.owner));
+                    if (isOwner) {
+                        const badge = document.createElement("small");
+                        badge.textContent = " ♛";
+                        badge.title = "Room owner";
+                        badge.setAttribute("aria-label", "Room owner");
+                        badge.style.color = "var(--amber)";
+                        name.append(badge);
+                    }
                     info.append(avatar, text);
                     const select = document.createElement("select");
                     const assignedClass =
                         state.userPrivilegeClasses?.[member.id] ||
-                        member.privilegeClass ||
+                        (member.privilegeClass === "Room Owner" && !Object.hasOwn(state.privilegeClasses || {}, "Room Owner") ? null : member.privilegeClass) ||
                         state.defaultPrivilegeClass ||
                         "";
                     Object.entries(state.privilegeClasses || {})
@@ -464,9 +473,7 @@ $encodedRoom = json_encode(
                             );
                             select.add(option);
                         });
-                    select.disabled =
-                        member.isStaff === true ||
-                        member.isOwner === true;
+                    select.disabled = member.isStaff === true && !isOwner;
                     select.addEventListener("change", () =>
                         send("adminCommand", {
                             arguments:
@@ -833,6 +840,7 @@ $encodedRoom = json_encode(
 
                     populate({
                         ...chatData,
+                        owner: chatUserId,
                         room: chatData.name || room,
                         roomName: chatData.roomName || chatData.displayName || chatData.name || room,
                         topic: chatData.topic || "",
