@@ -68,3 +68,21 @@ followed by `joinRoom` to obtain the normal member snapshot and open the chat.
 Server `error` responses keep form values intact. A timeout keeps the requested
 address so a late success can still be recognized. `roomCreated` broadcasts
 trigger `getRooms`; they are not trusted as proof of access to a private chat.
+
+## Images, emoji and links
+
+Direct PNG, JPEG, GIF, WebP, AVIF and BMP links show inline previews, including
+URLs with query strings. Up to four images are previewed per message; further
+URLs remain links. Previews are lazy loaded without a referrer. If an image
+cannot load, its clickable link remains. Web pages that contain images are
+linked normally rather than scraped for previews.
+
+Unicode emoji work as text. The composer emoji button inserts at the current
+selection. Common shortcodes such as `:smile:`, `:thumbsup:`, `:heart:` and
+`:fire:` are rendered as emoji; unknown shortcodes remain visible.
+
+`https://infini9.net(infini9)` and `[infini9](https://infini9.net)` both display
+`infini9`. Use Markdown syntax for labels on URLs with paths. Link destinations
+are restricted to HTTP/HTTPS, and message text never becomes raw HTML. Links
+open `/chat/link.php` in a new tab, showing the actual destination hostname and
+URL before the user chooses Continue. No automatic redirect occurs.

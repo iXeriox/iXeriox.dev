@@ -411,7 +411,12 @@ session_start();
 
                                 <span class="msg-text">
                                     <template v-for="(part, partIndex) in messageParts(msg.message)" :key="`${msg.id || index}-${partIndex}`">
-                                        <span :class="{'message-mention': part.mention, 'message-bold': part.bold, 'message-italic': part.italic, 'message-underline': part.underline}">{{ part.text }}</span>
+                                        <a v-if="part.href" :href="messageLinkHref(part.href)" target="_blank" rel="noopener noreferrer" :class="{'message-link': true, 'message-image-link': part.image, 'message-bold': part.bold, 'message-italic': part.italic, 'message-underline': part.underline}">
+                                            <img v-if="part.image && !failedMessageImages[part.href]" :src="part.href" alt="Shared image" width="280" height="180" loading="lazy" decoding="async" referrerpolicy="no-referrer" @error="messageImageFailed(part.href)">
+                                            <small v-if="part.image && failedMessageImages[part.href]" class="message-image-fallback">Preview unavailable · open image</small>
+                                            <span>{{ part.text }}</span>
+                                        </a>
+                                        <span v-else :class="{'message-mention': part.mention, 'message-bold': part.bold, 'message-italic': part.italic, 'message-underline': part.underline}">{{ part.text }}</span>
                                     </template>
                                 </span>
                             </template>
@@ -560,7 +565,11 @@ session_start();
                                 <button type="button" @click="formatMessage('**')" :disabled="isBanned || !connected" title="Bold" aria-label="Bold"><strong>B</strong></button>
                                 <button type="button" @click="formatMessage('*')" :disabled="isBanned || !connected" title="Italic" aria-label="Italic"><em>I</em></button>
                                 <button type="button" @click="formatMessage('__')" :disabled="isBanned || !connected" title="Underline" aria-label="Underline"><u>U</u></button>
+                                <button type="button" @click="showEmojiPicker = !showEmojiPicker" :disabled="isBanned || !connected" :aria-expanded="showEmojiPicker" aria-controls="chat-emoji-picker" title="Insert emoji" aria-label="Insert emoji">☺</button>
                                 <button type="button" @click="toggleMultiline" :disabled="isBanned || !connected" :aria-pressed="multiline" title="Toggle multiline input" aria-label="Multiline input">↵</button>
+                            </div>
+                            <div v-if="showEmojiPicker" id="chat-emoji-picker" class="chat-emoji-picker" role="group" aria-label="Emoji choices" @keydown.esc.prevent.stop="showEmojiPicker = false">
+                                <button v-for="[name, emoji] in CHAT_EMOJI" :key="name" type="button" @click="insertEmoji(emoji)" :title="':' + name + ':'" :aria-label="name.replaceAll('_', ' ')" :disabled="isBanned || !connected">{{ emoji }}</button>
                             </div>
                             <div class="message-entry">
                                 <textarea v-if="multiline"

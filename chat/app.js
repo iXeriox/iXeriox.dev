@@ -322,6 +322,89 @@ function styledMessageParts(value, styles = {}, depth = 0) {
     return parts;
 }
 
+const CHAT_EMOJI = Object.freeze([
+    ["smile", "😄"], ["grinning", "😀"], ["laughing", "😆"], ["joy", "😂"],
+    ["wink", "😉"], ["heart_eyes", "😍"], ["sunglasses", "😎"], ["thinking", "🤔"],
+    ["cry", "😢"], ["sob", "😭"], ["angry", "😠"], ["surprised", "😮"],
+    ["thumbsup", "👍"], ["thumbsdown", "👎"], ["wave", "👋"], ["clap", "👏"],
+    ["pray", "🙏"], ["muscle", "💪"], ["heart", "❤️"], ["broken_heart", "💔"],
+    ["fire", "🔥"], ["tada", "🎉"], ["sparkles", "✨"], ["100", "💯"],
+    ["eyes", "👀"], ["rocket", "🚀"], ["check", "✅"], ["coffee", "☕"]
+]);
+const EMOJI_SHORTCODES = Object.fromEntries(CHAT_EMOJI);
+
+function expandEmojiShortcodes(text) {
+    return text.replace(/:([a-z0-9_+-]+):/gi, (match, name) => Object.hasOwn(EMOJI_SHORTCODES, name.toLowerCase()) ? EMOJI_SHORTCODES[name.toLowerCase()] : match);
+}
+
+function parsedMessageLink(raw, label, context = "") {
+    let candidate = raw.replace(/\\([()])/g, "$1");
+    let suffix = "";
+    const punctuation = candidate.match(/[.,!?;:]+$/)?.[0] || "";
+    if (punctuation) { suffix = punctuation; candidate = candidate.slice(0, -punctuation.length); }
+    for (const marker of ["**", "__", "*"]) {
+        if (context.includes(marker) && candidate.endsWith(marker)) {
+            candidate = candidate.slice(0, -marker.length);
+            suffix = marker + suffix;
+        }
+    }
+    const labelled = candidate.match(/^(https?:\/\/.+)\(([^()\n]+)\)$/i);
+    if (labelled) {
+        try {
+            const base = new URL(labelled[1]);
+            // URL(label) is unambiguous for the root-domain form. Preserve
+            // parentheses in ordinary paths such as Wikipedia article URLs.
+            if (base.pathname === "/" && !base.search && !base.hash) {
+                candidate = labelled[1];
+                if (!label || /^https?:\/\//i.test(label)) label = labelled[2];
+            }
+        } catch { /* Keep invalid destinations as text. */ }
+    }
+    for (const [open, close] of [["(", ")"], ["[", "]"], ["{", "}"]]) {
+        while (candidate.endsWith(close) && candidate.split(close).length > candidate.split(open).length) {
+            candidate = candidate.slice(0, -1);
+            suffix = close + suffix;
+        }
+    }
+    try {
+        const url = new URL(candidate);
+        if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+        return { text: label || candidate, href: url.href, image: /\.(?:png|jpe?g|gif|webp|avif|bmp)$/i.test(url.pathname), suffix };
+    } catch { return null; }
+}
+
+function messageContentParts(value) {
+    const text = String(value ?? "");
+    let marker = "\uE000link";
+    while (text.includes(marker)) marker += "x";
+    const links = [];
+    let previewCount = 0;
+    // Protect URLs before formatting; message text is never interpreted as HTML.
+    const protectedText = text.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s<>]+)\)|https?:\/\/[^\s<>"']+/gi, (raw, label, destination, offset) => {
+        const link = parsedMessageLink(destination || raw, label, text.slice(0, offset));
+        if (!link) return raw;
+        const image = link.image && previewCount < 4;
+        if (image) previewCount++;
+        const index = links.push({ text: link.text, href: link.href, image }) - 1;
+        // Bare-link punctuation belongs to the surrounding message. Labelled
+        // link syntax is consumed as a whole.
+        const suffix = destination ? "" : link.suffix;
+        return `${marker}${index}\uE001${suffix}`;
+    });
+    const pattern = new RegExp(`(${marker}\\d+\uE001)`, "g");
+    return styledMessageParts(protectedText).flatMap(part => part.text.split(pattern).filter(Boolean).map(text => {
+        if (text.startsWith(marker) && text.endsWith("\uE001")) {
+            const link = links[Number(text.slice(marker.length, -1))];
+            if (link) return { ...part, ...link };
+        }
+        return { ...part, text: expandEmojiShortcodes(text) };
+    }));
+}
+
+function messageLinkHref(url) {
+    return `/chat/link.php?url=${encodeURIComponent(url)}`;
+}
+
 function normalizeRoomListing(room) {
     if (!room || typeof room.name !== "string" || !room.name.trim()) return null;
     return {
@@ -459,7 +542,7 @@ createApp({
         function closeMobileUsersOnDesktop() {
             if (window.innerWidth > 800) showMobileUsers.value = false;
         }
-        watch(currentRoom, () => { showMobileUsers.value = false; });
+        watch(currentRoom, () => { showMobileUsers.value = false; showEmojiPicker.value = false; });
         watch(username, () => { showMobileUsers.value = false; showJoinDialog.value = false; });
         const roomSearch = ref("");
         const chatDialog = ref(null);
@@ -591,8 +674,8 @@ createApp({
         function messageParts(value) {
             const currentName = username.value.trim();
             const escapedName = currentName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            return styledMessageParts(value).flatMap(part => {
-                if (!currentName) return [{ ...part, mention: false }];
+            return messageContentParts(value).flatMap(part => {
+                if (part.href || !currentName) return [{ ...part, mention: false }];
                 return part.text.split(new RegExp(`(${escapedName})`, "gi"))
                     .filter(Boolean)
                     .map(text => ({ ...part, text, mention: text.toLowerCase() === currentName.toLowerCase() }));
@@ -706,6 +789,8 @@ createApp({
         const message = ref("");
         const messageBox = ref(null);
         const messageInput = ref(null);
+        const showEmojiPicker = ref(false);
+        const failedMessageImages = ref({});
         const multiline = ref(false);
 
         let socket = null;
@@ -2532,6 +2617,25 @@ createApp({
         |--------------------------------------------------------------------------
         */
 
+        function insertEmoji(emoji) {
+            if (isBanned.value || !connected.value) return;
+            const input = messageInput.value;
+            if (!input) return;
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            message.value = message.value.slice(0, start) + emoji + message.value.slice(end);
+            showEmojiPicker.value = false;
+            nextTick(() => {
+                input.focus();
+                input.setSelectionRange(start + emoji.length, start + emoji.length);
+            });
+            sendTyping();
+        }
+
+        function messageImageFailed(url) {
+            failedMessageImages.value = { ...failedMessageImages.value, [url]: true };
+        }
+
         function addressUser(user) {
             if (isBanned.value || !connected.value) return;
             const prefix = `${memberLabel(user)}: `;
@@ -2791,6 +2895,12 @@ createApp({
             sendTyping,
             isUserTyping,
             messageParts,
+            messageLinkHref,
+            CHAT_EMOJI,
+            showEmojiPicker,
+            insertEmoji,
+            failedMessageImages,
+            messageImageFailed,
             styledMessageParts,
             formatWhoisDate,
             decodeProfileText,
