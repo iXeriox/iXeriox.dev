@@ -332,6 +332,21 @@ function normalizeRoomListing(room) {
     };
 }
 
+function suggestedRoomId(title) {
+    return String(title || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
+}
+
+function createRoomRequest(title, id, topic, visibility) {
+    const chatTitle = String(title || "").trim();
+    const name = String(id || "").trim() || suggestedRoomId(chatTitle);
+    if (!chatTitle || chatTitle.length > 64) throw new Error("Enter a chat name of 1–64 characters.");
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(name)) throw new Error("Choose a room address using 1–64 letters, numbers, hyphens or underscores.");
+    if (!["public", "private", "invite"].includes(visibility)) throw new Error("Choose who can join this chat.");
+    if (String(topic || "").length > 500) throw new Error("Keep the topic within 500 characters.");
+    return { name, chatTitle, chatTopic: String(topic || "").trim(), visibility };
+}
+
 function matchingRooms(rooms, query) {
     const search = String(query || "").trim().toLowerCase();
     return rooms.filter(room => `${room.roomName} ${room.name} ${room.topic}`.toLowerCase().includes(search));
@@ -450,6 +465,11 @@ createApp({
         const chatDialog = ref(null);
         const chatDialogTab = ref("browse");
         const createChatName = ref("");
+        const createChatId = ref("");
+        const createChatIdSuggestion = computed(() => suggestedRoomId(createChatName.value));
+        const creatingChat = ref(false);
+        let createChatTimer = null;
+        let pendingCreateRoomId = null;
         const createChatTopic = ref("");
         const createChatVisibility = ref("public");
         const chatDialogError = ref("");
@@ -457,10 +477,36 @@ createApp({
         let joinRoomTimer = null;
         let chatDialogTrigger = null;
 
+        function createChat() {
+            if (creatingChat.value || joiningRoom.value) return;
+            chatDialogError.value = "";
+            if (!isSocketReady()) {
+                chatDialogError.value = "Reconnect before creating a chat.";
+                return;
+            }
+            let request;
+            try {
+                request = createRoomRequest(createChatName.value, createChatId.value, createChatTopic.value, createChatVisibility.value);
+            } catch (error) {
+                chatDialogError.value = error.message;
+                return;
+            }
+            creatingChat.value = true;
+            pendingCreateRoomId = request.name;
+            clearTimeout(createChatTimer);
+            createChatTimer = setTimeout(() => {
+                creatingChat.value = false;
+                // Retain the request ID so a late success can still be recognised.
+                chatDialogError.value = "Creation is taking longer than expected. Check Find a chat before retrying.";
+                if (isSocketReady()) socket.emit("getRooms");
+            }, 10000);
+            socket.emit("createRoom", request);
+        }
+
         function openChatDialog() {
             chatDialogTrigger = document.activeElement;
             chatDialogTab.value = "browse";
-            chatDialogError.value = "";
+            if (!creatingChat.value) chatDialogError.value = "";
             showJoinDialog.value = true;
             if (isSocketReady()) socket.emit("getRooms");
         }
@@ -477,7 +523,7 @@ createApp({
 
         function roomAccessLabel(room) {
             if (room.visibility === "permission") return `Level ${room.requiredLevel || 0}+`;
-            if (room.visibility === "private_users" || room.visibility === "private") return "Private";
+            if (["private_users", "private", "invite"].includes(room.visibility)) return "Private";
             if (room.visibility === "unlisted") return "Unlisted";
             return "Public";
         }
@@ -1665,7 +1711,10 @@ createApp({
 
         function logout() {
             clearTimeout(joinRoomTimer);
+            clearTimeout(createChatTimer);
             joiningRoom.value = null;
+            creatingChat.value = false;
+            pendingCreateRoomId = null;
             chatDialogError.value = "";
             cleanupSocket();
             clearTimeout(typingTimeout);
@@ -1842,6 +1891,43 @@ createApp({
             | Rooms
             |--------------------------------------------------------------------------
             */
+
+            socket.on("createRoom", data => {
+                const room = data?.room;
+                if (data?.response !== "success" || !room?.name || room.name !== pendingCreateRoomId) return;
+                clearTimeout(createChatTimer);
+                pendingCreateRoomId = null;
+                creatingChat.value = false;
+                chatDialogError.value = "";
+                createChatName.value = "";
+                createChatId.value = "";
+                createChatTopic.value = "";
+                createChatVisibility.value = "public";
+                showJoinDialog.value = false;
+                const listing = normalizeRoomListing(room);
+                availableRooms.value = [...availableRooms.value.filter(item => item.name !== room.name), listing];
+                // V2 creates membership but does not emit joinRoom or its full
+                // member snapshot. Fetch that through the normal join protocol.
+                joinRoom(room.name, true);
+                socket.emit("getRooms");
+            });
+
+            socket.on("roomCreated", () => {
+                // V2 broadcasts creation globally. Refresh the access-filtered
+                // list rather than treating that broadcast as an invitation.
+                if (isSocketReady()) socket.emit("getRooms");
+            });
+
+            socket.on("error", data => {
+                if (!creatingChat.value && !joiningRoom.value) return;
+                if (data?.room && data.room !== pendingCreateRoomId && data.room !== joiningRoom.value) return;
+                clearTimeout(createChatTimer);
+                clearTimeout(joinRoomTimer);
+                creatingChat.value = false;
+                pendingCreateRoomId = null;
+                joiningRoom.value = null;
+                chatDialogError.value = String(data?.message || "The chat request failed. Please try again.");
+            });
 
             socket.on("rooms", data => {
                 const listings = Array.isArray(data) ? data : data?.rooms;
@@ -2141,6 +2227,12 @@ createApp({
 
             socket.on("roomMessage", data => {
                 const room = data.room;
+                if (joiningRoom.value === room && data.senderId === "system" && ["Room not found", "You do not have permission to join this room"].includes(data.content)) {
+                    clearTimeout(joinRoomTimer);
+                    joiningRoom.value = null;
+                    chatDialogError.value = data.content;
+                    return;
+                }
                 const messageId = data.clientMessageId || data.messageId || data.id;
 
                 if (
@@ -2626,6 +2718,7 @@ createApp({
             closeDiscordPopup();
             clearTimeout(typingTimeout);
             clearTimeout(joinRoomTimer);
+            clearTimeout(createChatTimer);
             cleanupSocket();
         });
 
@@ -2668,6 +2761,10 @@ createApp({
             chatDialogError,
             joiningRoom,
             createChatName,
+            createChatId,
+            createChatIdSuggestion,
+            creatingChat,
+            createChat,
             createChatTopic,
             createChatVisibility,
             showMobileUsers,

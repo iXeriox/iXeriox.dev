@@ -43,3 +43,28 @@ layout browser checks use a simulated iframe API; live media playback requires
 verification against YouTube in the target browser/network.
 
 Run regression tests with `node --test tests/*.test.cjs` from the repository root.
+
+## Finding and creating chats
+
+The plus button opens a chat finder. `rooms` listings use `chatTitle` for display,
+`name` as the stable identifier, and `chatTopic` for topic searches. Opening the
+finder requests a fresh access-filtered list with `getRooms`.
+
+The creation form follows `v2/routes/socket.js` in iXeriox/i9ChatServer:
+
+```js
+socket.emit('createRoom', {
+    name: 'weekend-gaming',
+    chatTitle: 'Weekend gaming',
+    chatTopic: '**Welcome**',
+    visibility: 'private' // or 'public'
+});
+```
+
+The address is generated from the display name unless overridden. It must use
+1–64 letters, numbers, hyphens or underscores. Privilege classes and default
+membership are supplied by the server. A successful `createRoom` response is
+followed by `joinRoom` to obtain the normal member snapshot and open the chat.
+Server `error` responses keep form values intact. A timeout keeps the requested
+address so a late success can still be recognized. `roomCreated` broadcasts
+trigger `getRooms`; they are not trusted as proof of access to a private chat.

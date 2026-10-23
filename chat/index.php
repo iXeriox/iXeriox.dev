@@ -675,7 +675,7 @@ session_start();
                                 <p v-if="room.topic" class="chat-discovery-topic">{{ room.topic }}</p>
                                 <small>{{ roomAccessLabel(room) }} · {{ room.memberCount }} {{ room.memberCount === 1 ? 'member' : 'members' }}</small>
                             </div>
-                            <button type="button" class="join-button" :class="{joined: isRoomJoined(room.name)}" :disabled="!connected || Boolean(joiningRoom)" @click="joinRoom(room.name)">
+                            <button type="button" class="join-button" :class="{joined: isRoomJoined(room.name)}" :disabled="!connected || Boolean(joiningRoom) || creatingChat" @click="joinRoom(room.name)">
                                 {{ joiningRoom === room.name ? 'Joining…' : isRoomJoined(room.name) ? 'Open chat' : 'Join chat' }}
                             </button>
                         </article>
@@ -686,17 +686,21 @@ session_start();
                         </div>
                     </div>
                 </section>
-                <section v-else class="chat-create" aria-label="Create a chat">
+                <form v-else class="chat-create" aria-label="Create a chat" @submit.prevent="createChat">
+                    <fieldset :disabled="creatingChat">
                     <label for="create-chat-name">Chat name</label>
-                    <input id="create-chat-name" v-model="createChatName" maxlength="64" placeholder="e.g. Weekend gaming" autocomplete="off">
+                    <input id="create-chat-name" v-model="createChatName" maxlength="64" required placeholder="e.g. Weekend gaming" autocomplete="off">
+                    <label for="create-chat-id">Room address</label>
+                    <input id="create-chat-id" v-model="createChatId" maxlength="64" pattern="[A-Za-z0-9_-]{1,64}" :placeholder="createChatIdSuggestion || 'weekend-gaming'" aria-describedby="create-chat-id-help" autocomplete="off">
+                    <p id="create-chat-id-help" class="chat-create-hint">{{ createChatId || createChatIdSuggestion ? '#' + (createChatId || createChatIdSuggestion) : 'Choose a unique address' }} · Letters, numbers, hyphens and underscores.</p>
                     <label for="create-chat-topic">Topic <small>(optional)</small></label>
                     <textarea id="create-chat-topic" v-model="createChatTopic" maxlength="500" rows="3" placeholder="What will you talk about?"></textarea>
                     <label for="create-chat-visibility">Who can join?</label>
-                    <select id="create-chat-visibility" v-model="createChatVisibility"><option value="public">Public</option><option value="private_users">Private · invited members</option></select>
+                    <select id="create-chat-visibility" v-model="createChatVisibility"><option value="public">Public</option><option value="private">Private · invited members</option></select>
                     <p class="chat-create-hint">Your chat will have its own member list and permission classes.</p>
-                    <button type="button" class="join-button" disabled>Create chat</button>
-                    <p class="chat-create-hint">Chat creation is currently unavailable.</p>
-                </section>
+                    <button type="submit" class="join-button" :disabled="!connected || !createChatName.trim() || Boolean(joiningRoom)">{{ creatingChat ? 'Creating…' : 'Create chat' }}</button>
+                    </fieldset>
+                </form>
             </dialog>
 
             <!-- ========================================================= -->

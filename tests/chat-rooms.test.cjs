@@ -20,3 +20,18 @@ test('legacy listings fall back safely; malformed rooms are discarded',()=>{
  assert.equal(context.normalizeRoomListing({chatTitle:'Missing ID'}),null);
  assert.equal(context.normalizeRoomListing(null),null);
 });
+
+test('creation payload matches V2 fields and keeps display name separate from address',()=>{
+ const request=context.createRoomRequest('  Weekend gaming  ','','**Welcome**','private');
+ assert.deepEqual(JSON.parse(JSON.stringify(request)),{name:'weekend-gaming',chatTitle:'Weekend gaming',chatTopic:'**Welcome**',visibility:'private'});
+ assert.equal(context.createRoomRequest('Café chat','Custom_123','','public').name,'Custom_123');
+ assert.equal(context.suggestedRoomId('Café chat'),'cafe-chat');
+ assert.equal(context.suggestedRoomId('a'.repeat(100)).length,64);
+});
+
+test('invalid creation requests are rejected before emission',()=>{
+ for(const args of [['','','','public'],['Valid','space in id','','public'],['Valid','valid','','private_users'],['Valid','valid','x'.repeat(501),'public'],['a'.repeat(65),'valid','','public']]){
+  assert.throws(()=>context.createRoomRequest(...args));
+ }
+ assert.equal(context.createRoomRequest('Chat','chat','','invite').visibility,'invite');
+});

@@ -3816,3 +3816,6 @@ button.msg-user { font-weight:700; }
     .chat-create { padding:0 16px 16px; }
     .chat-discovery-dialog input, .chat-discovery-dialog textarea, .chat-discovery-dialog select { font-size:16px; }
 }
+
+.chat-create fieldset { display:flex; flex-direction:column; gap:12px; padding:0; margin:0; border:0; min-width:0; }
+.chat-create fieldset:disabled { opacity:.65; }
