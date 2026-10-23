@@ -396,7 +396,7 @@ session_start();
                             <template v-else>
                                 <span class="msg-time">[{{ msg.time }}]</span>
 
-                                <span v-if="msg.type !== 'action' && msg.user !== 'system'" class="msg-user" :class="'class-' + classMeta(msg.class).tier">{{ msg.user }}</span>
+                                <button v-if="msg.type !== 'action' && msg.user !== 'system'" type="button" class="msg-user user-address" :class="'class-' + classMeta(msg.class).tier" @click="addressUser({displayName: msg.user})" :disabled="isBanned || !connected" :title="'Address ' + msg.user">{{ msg.user }}</button>
                                 <span v-else-if="msg.type === 'action'"> ** {{ msg?.rawData?.senderName || msg.user }}</span>
                                 <span v-else-if="msg.user === 'system'" class="msg-system">SYSTEM >> </span>
                                 <small
@@ -493,7 +493,7 @@ session_start();
                                         }"
                                     ></span>
 
-                                    <span class="user-name">{{ memberLabel(user) }}</span>
+                                    <button type="button" class="user-name user-address" @click="addressUser(user)" :disabled="isBanned || !connected" :title="'Address ' + memberLabel(user)">{{ memberLabel(user) }}</button>
                                     <small v-if="isRoomOwner(currentRoomObj, user)" class="room-owner-badge" title="Room owner" aria-label="Room owner">♛</small>
 
                                 </div>
@@ -621,7 +621,7 @@ session_start();
                         <div v-for="user in group.users" :key="user.id" class="user" :class="'tier-' + group.tier">
                             <img v-if="user.avatar" class="mobile-user-avatar" :src="user.avatar" alt="">
                             <span v-else :class="user.status" aria-hidden="true"></span>
-                            <span class="user-name">{{ memberLabel(user) }}</span>
+                            <button type="button" class="user-name user-address" @click="addressUser(user)" :disabled="isBanned || !connected" :title="'Address ' + memberLabel(user)">{{ memberLabel(user) }}</button>
                                     <small v-if="isRoomOwner(currentRoomObj, user)" class="room-owner-badge" title="Room owner" aria-label="Room owner">♛</small>
                         </div>
                     </div>

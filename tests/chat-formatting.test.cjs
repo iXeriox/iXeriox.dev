@@ -93,3 +93,24 @@ test('single-line Enter sends even with Shift held', () => {
     assert.equal(state.sent, 1);
     assert.equal(prevented, true);
 });
+
+test('clicking a user prepends their name, preserves draft and focuses input', () => {
+    let focused=false;
+    const state=vm.createContext({
+        isBanned:{value:false}, connected:{value:true}, message:{value:'hello'},
+        showMobileUsers:{value:true}, memberLabel:user=>user.displayName,
+        nextTick:fn=>fn(),messageInput:{value:{focus(){focused=true;},setSelectionRange(a,b){state.selection=[a,b];}}}
+    });
+    const start=source.indexOf('        function addressUser(');
+    vm.runInContext(source.slice(start,source.indexOf('        function toggleMultiline(',start)),state);
+    state.addressUser({displayName:'iXeriox'});
+    assert.equal(state.message.value,'iXeriox: hello');
+    assert.equal(state.showMobileUsers.value,false);
+    assert(focused);
+    assert.deepEqual(state.selection,[14,14]);
+    state.addressUser({displayName:'iXeriox'});
+    assert.equal(state.message.value,'iXeriox: hello');
+    state.isBanned.value=true;
+    state.addressUser({displayName:'Other'});
+    assert.equal(state.message.value,'iXeriox: hello');
+});

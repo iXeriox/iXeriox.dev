@@ -102,6 +102,29 @@ $encodedRoom = json_encode(
             .gate-card{padding:24px 18px;max-height:calc(100dvh - 48px);overflow-y:auto}
             .toast{left:12px;right:12px;bottom:12px;max-width:none}
         }
+        .class-create{padding:14px;border:1px solid var(--border);border-radius:12px}.class-create summary{cursor:pointer;color:var(--cyan);font-weight:600}.class-create[open] summary{margin-bottom:18px}
+        .permission-save-hint{margin:18px 0 12px}
+        .permission-workspace{display:grid;grid-template-columns:minmax(150px,190px) minmax(0,1fr);gap:14px;align-items:start}
+        .class-navigation{display:flex;flex-direction:column;gap:8px;max-height:650px;overflow-y:auto}
+        .class-choice{display:flex;flex-direction:column;gap:7px;width:100%;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--panel-2);color:var(--muted);text-align:left;overflow-wrap:anywhere}
+        .class-choice strong{color:var(--text);font-size:13px}.class-choice small{font-size:11px;line-height:1.5}
+        .class-choice[aria-pressed="true"]{border-color:var(--cyan);background:rgba(54,224,208,.08);box-shadow:inset 3px 0 var(--cyan)}
+        .permission-workspace .class-list{margin:0;min-width:0}.class-title{flex-wrap:wrap;min-width:0;overflow-wrap:anywhere}
+        .permission-workspace .class-head{flex-direction:column;align-items:stretch}
+        .permission-group{margin:20px 0 0;padding:0;border:0;min-width:0}.permission-group legend{margin-bottom:10px;color:var(--cyan);font:700 11px var(--mono);text-transform:uppercase;letter-spacing:.08em}
+        .permission-workspace .permission-grid{grid-template-columns:1fr}
+        .permission-item{align-items:flex-start;padding:12px;gap:12px;border:1px solid var(--border);cursor:pointer;min-height:60px}
+        .permission-item:has(input:checked){border-color:rgba(54,224,208,.3);background:rgba(54,224,208,.06)}
+        .permission-item input{flex:0 0 18px;width:18px;height:18px;margin:2px 0 0;accent-color:var(--cyan)}
+        .permission-item strong{display:block;color:var(--text);font:600 13px Inter,"Segoe UI",system-ui,sans-serif}
+        .permission-item small{display:block;margin-top:5px;font:12px/1.5 Inter,"Segoe UI",system-ui,sans-serif;color:var(--muted)}
+        .assignment-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,200px);gap:12px;margin-bottom:12px}
+        .assignment-count{margin-bottom:12px}.member-assignment{display:flex;flex-direction:column;gap:6px;min-width:0}
+        .assignment-reset{align-self:flex-start;padding:4px 0;border:0;background:none;color:var(--cyan);font-size:11px}.assignment-reset:disabled{color:var(--muted);opacity:.6;cursor:default}
+        .member-info>span:last-child{min-width:0}.member-name{display:block}.member-id{overflow-wrap:anywhere}
+        button:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+        @media(max-width:1000px){.permission-workspace{grid-template-columns:1fr}.class-navigation{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:260px}}
+        @media(max-width:480px){.assignment-filters{grid-template-columns:1fr}.member{grid-template-columns:minmax(0,1fr)}.member-assignment{width:100%}}
     </style>
 </head>
 <body>
@@ -173,14 +196,25 @@ $encodedRoom = json_encode(
             </section>
 
             <section class="panel" data-panel="permissions" hidden>
-                <div class="panel-head"><div><h2>Privilege classes</h2><p>Create room-specific classes, order them, and assign fixed chat permissions.</p></div><button class="secondary" type="button" data-refresh>Refresh</button></div>
+                <div class="panel-head"><div><h2>Privilege classes</h2><p>Choose a class, edit what it can do, then assign members. Higher order means greater authority.</p></div><button class="secondary" type="button" data-refresh>Refresh</button></div>
+                <details class="class-create"><summary>Create a class</summary>
                 <div class="grid" style="margin-bottom:22px">
                     <div class="field"><label for="new-class-name">Class name</label><input id="new-class-name" maxlength="64" placeholder="e.g. Race Marshals"></div>
                     <div class="field"><label for="new-class-order">Order</label><input id="new-class-order" type="number" value="10"></div>
                 </div>
                 <div class="actions" style="margin-top:0;padding-top:0;border-top:0"><button class="primary" type="button" data-add-class>Add class</button></div>
-                <div class="class-list" data-classes><div class="empty">Waiting for privilege classes...</div></div>
+                </details>
+                <p class="hint permission-save-hint">Changes are sent immediately. The server confirms each update.</p>
+                <div class="permission-workspace">
+                    <nav class="class-navigation" data-class-navigation aria-label="Choose a privilege class"></nav>
+                    <div class="class-list" data-classes><div class="empty">Waiting for privilege classes...</div></div>
+                </div>
                 <div class="panel-head" style="margin-top:28px"><div><h2>Member assignments</h2><p>Assign members to one of this room's custom classes.</p></div></div>
+                <div class="assignment-filters">
+                    <div class="field"><label for="member-search">Find a member</label><input id="member-search" type="search" placeholder="Search name or user ID" autocomplete="off"></div>
+                    <div class="field"><label for="member-class-filter">Class</label><select id="member-class-filter"><option value="">All classes</option></select></div>
+                </div>
+                <p class="hint assignment-count" data-assignment-count aria-live="polite"></p>
                 <div class="member-list" data-members><div class="empty">Waiting for room members…</div></div>
             </section>
 
@@ -209,7 +243,7 @@ $encodedRoom = json_encode(
             </section>
         </div>
     </main>
-    <div class="toast" data-toast hidden></div>
+    <div class="toast" data-toast role="status" aria-live="polite" hidden></div>
     <script>
         (() => {
             const room = <?= $encodedRoom ?>;
@@ -248,6 +282,30 @@ $encodedRoom = json_encode(
                 "chat.owner.transfer",
                 "chat.delete"
             ];
+            const PERMISSION_DETAILS = {
+                "chat.view": ["Access", "View room", "See this room and its conversation."],
+                "chat.join": ["Access", "Join room", "Become a member of the room."],
+                "chat.send": ["Conversation", "Send messages", "Post messages in the room."],
+                "chat.invite": ["Access", "Invite members", "Invite other people to join."],
+                "chat.kick": ["Moderation", "Remove members", "Remove someone from the room."],
+                "chat.ban": ["Moderation", "Ban members", "Prevent someone from participating."],
+                "chat.unban": ["Moderation", "Unban members", "Allow a banned member to return."],
+                "chat.title": ["Room settings", "Change room title", "Edit the room's display name."],
+                "chat.topic": ["Room settings", "Change topic", "Update the topic above the conversation."],
+                "chat.settings": ["Room settings", "Manage settings", "Change room configuration."],
+                "chat.privilegeClasses.manage": ["Administration", "Manage classes", "Create classes and change their permissions."],
+                "chat.privilegeClasses.assign": ["Administration", "Assign classes", "Change which class a member belongs to."],
+                "chat.owner.transfer": ["Administration", "Transfer ownership", "Transfer ownership of the room."],
+                "chat.delete": ["Administration", "Delete room", "Permanently delete the room."]
+            };
+            let selectedClass = null;
+
+            function assignedMemberClass(member) {
+                return state.userPrivilegeClasses?.[member.id] ??
+                    (member.privilegeClass === "Room Owner" && !Object.hasOwn(state.privilegeClasses || {}, "Room Owner") ? null : member.privilegeClass) ??
+                    state.defaultPrivilegeClass ?? "";
+            }
+
             let state = {
                 room,
                 roomName: room,
@@ -399,6 +457,7 @@ $encodedRoom = json_encode(
                 $("#room-icon").value = state.settings?.icon || "#";
                 $("#welcome").value = state.settings?.welcome || "";
                 $("[data-topic-count]").textContent = $("#room-topic").value.length;
+                renderClassFilter();
                 renderClasses();
                 renderMembers();
             }
@@ -420,11 +479,26 @@ $encodedRoom = json_encode(
                 $("[data-denied]").hidden = false;
             }
 
+            function renderClassFilter() {
+                const filter = $("#member-class-filter");
+                const previous = filter.value;
+                filter.replaceChildren(new Option("All classes", ""));
+                Object.keys(state.privilegeClasses || {}).sort().forEach(name => filter.add(new Option(name, name)));
+                filter.value = Object.hasOwn(state.privilegeClasses || {}, previous) ? previous : "";
+            }
+
             function renderMembers() {
                 const target = $("[data-members]");
-                const members = Array.isArray(state.members) ? state.members : [];
+                const allMembers = Array.isArray(state.members) ? state.members : [];
+                const search = $("#member-search").value.trim().toLowerCase();
+                const filter = $("#member-class-filter").value;
+                const members = allMembers.filter(member =>
+                    (!search || `${member.displayName || ""} ${member.id || ""}`.toLowerCase().includes(search)) &&
+                    (!filter || assignedMemberClass(member) === filter)
+                );
+                $("[data-assignment-count]").textContent = `${members.length} of ${allMembers.length} members`;
                 if (!members.length) {
-                    target.innerHTML = '<div class="empty">No members were returned for this room.</div>';
+                    target.innerHTML = '<div class="empty">No members match. Try another name or class.</div>';
                     return;
                 }
                 target.replaceChildren(...members.map(member => {
@@ -454,11 +528,8 @@ $encodedRoom = json_encode(
                     }
                     info.append(avatar, text);
                     const select = document.createElement("select");
-                    const assignedClass =
-                        state.userPrivilegeClasses?.[member.id] ||
-                        (member.privilegeClass === "Room Owner" && !Object.hasOwn(state.privilegeClasses || {}, "Room Owner") ? null : member.privilegeClass) ||
-                        state.defaultPrivilegeClass ||
-                        "";
+                    const assignedClass = assignedMemberClass(member);
+                    select.setAttribute("aria-label", `Class for ${member.displayName || member.id}`);
                     Object.entries(state.privilegeClasses || {})
                         .sort(([, a], [, b]) =>
                             Number(b.order || 0) -
@@ -491,7 +562,22 @@ $encodedRoom = json_encode(
                             content: `/kick ${member.id}`
                         })
                     );
-                    row.append(info, select, kick);
+                    const assignment = document.createElement("div");
+                    assignment.className = "member-assignment";
+                    const summary = document.createElement("small");
+                    summary.className = "hint";
+                    const count = state.privilegeClasses?.[assignedClass]?.permissions?.length || 0;
+                    summary.textContent = `${count} ${count === 1 ? "permission" : "permissions"}${isOwner ? " · Owner access retained" : ""}`;
+                    assignment.append(select, summary);
+                    const reset = document.createElement("button");
+                    reset.type = "button";
+                    reset.className = "assignment-reset";
+                    reset.textContent = "Use default";
+                    reset.title = `Use the room default: ${state.defaultPrivilegeClass || "Unassigned"}`;
+                    reset.disabled = select.disabled || !Object.hasOwn(state.userPrivilegeClasses || {}, member.id);
+                    reset.addEventListener("click", () => send("adminCommand", { arguments: `unassign ${member.id}` }));
+                    assignment.append(reset);
+                    row.append(info, assignment, kick);
                     return row;
                 }));
             }
@@ -505,6 +591,24 @@ $encodedRoom = json_encode(
                     Number(first.order || 0)
                 );
 
+                const navigation = $("[data-class-navigation]");
+                if (!classes.some(([name]) => name === selectedClass)) selectedClass = classes[0]?.[0] ?? null;
+                navigation.replaceChildren(...classes.map(([name, definition]) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "class-choice";
+                    button.setAttribute("aria-pressed", String(name === selectedClass));
+                    const title = document.createElement("strong");
+                    title.textContent = name;
+                    const summary = document.createElement("small");
+                    const members = (state.members || []).filter(member => assignedMemberClass(member) === name).length;
+                    summary.textContent = `${members} ${members === 1 ? "member" : "members"} · ${(definition.permissions || []).length} ${(definition.permissions || []).length === 1 ? "permission" : "permissions"}`;
+                    const order = document.createElement("small");
+                    order.textContent = `Order ${definition.order}${name === state.defaultPrivilegeClass ? " · Default" : ""}`;
+                    button.append(title, summary, order);
+                    button.addEventListener("click", () => { selectedClass = name; renderClasses(); });
+                    return button;
+                }));
                 if (!classes.length) {
                     target.innerHTML =
                         '<div class="empty">No privilege classes were returned.</div>';
@@ -512,7 +616,7 @@ $encodedRoom = json_encode(
                 }
 
                 target.replaceChildren(
-                    ...classes.map(([className, definition]) => {
+                    ...classes.filter(([name]) => name === selectedClass).map(([className, definition]) => {
                         const card = document.createElement("article");
                         card.className = "class-card";
 
@@ -588,31 +692,37 @@ $encodedRoom = json_encode(
 
                         head.append(title, actions);
 
-                        const grid = document.createElement("div");
-                        grid.className = "permission-grid";
-
-                        for (const permission of CHAT_PERMISSIONS) {
-                            const label = document.createElement("label");
-                            label.className = "permission-item";
-                            const checkbox = document.createElement("input");
-                            checkbox.type = "checkbox";
-                            checkbox.checked = Array.isArray(
-                                definition.permissions
-                            ) && definition.permissions.includes(permission);
-                            checkbox.addEventListener("change", () =>
-                                send("adminCommand", {
-                                    arguments:
-                                        `permission ${checkbox.checked ? "add" : "remove"} ` +
-                                        `${className} | ${permission}`
-                                })
-                            );
-                            const text = document.createElement("span");
-                            text.textContent = permission;
-                            label.append(checkbox, text);
-                            grid.append(label);
+                        card.append(head);
+                        for (const group of ["Access", "Conversation", "Moderation", "Room settings", "Administration"]) {
+                            const fieldset = document.createElement("fieldset");
+                            fieldset.className = "permission-group";
+                            const legend = document.createElement("legend");
+                            legend.textContent = group;
+                            const grid = document.createElement("div");
+                            grid.className = "permission-grid";
+                            for (const permission of CHAT_PERMISSIONS.filter(key => PERMISSION_DETAILS[key][0] === group)) {
+                                const [, name, description] = PERMISSION_DETAILS[permission];
+                                const label = document.createElement("label");
+                                label.className = "permission-item";
+                                const checkbox = document.createElement("input");
+                                checkbox.type = "checkbox";
+                                checkbox.checked = Array.isArray(definition.permissions) && definition.permissions.includes(permission);
+                                checkbox.addEventListener("change", () => send("adminCommand", {
+                                    arguments: `permission ${checkbox.checked ? "add" : "remove"} ${className} | ${permission}`
+                                }));
+                                const text = document.createElement("span");
+                                const title = document.createElement("strong");
+                                title.textContent = name;
+                                const detail = document.createElement("small");
+                                detail.textContent = description;
+                                text.append(title, detail);
+                                label.append(checkbox, text);
+                                grid.append(label);
+                            }
+                            fieldset.append(legend, grid);
+                            card.append(fieldset);
                         }
 
-                        card.append(head, grid);
                         return card;
                     })
                 );
@@ -622,6 +732,8 @@ $encodedRoom = json_encode(
                 $$("[data-tab]").forEach(item => item.classList.toggle("active", item === tab));
                 $$("[data-panel]").forEach(panel => { panel.hidden = panel.dataset.panel !== tab.dataset.tab; });
             }));
+            $("#member-search").addEventListener("input", renderMembers);
+            $("#member-class-filter").addEventListener("change", renderMembers);
             $("#room-topic").addEventListener("input", event => { $("[data-topic-count]").textContent = event.target.value.length; });
             $("[data-close-window]").addEventListener("click", () => window.close());
             $("[data-retry]").addEventListener("click", () => {
@@ -686,6 +798,10 @@ $encodedRoom = json_encode(
 
                     notify(data.message || (data.success ? "Saved." : "The update failed."));
 
+                    if (!data.success) {
+                        renderClasses();
+                        renderMembers();
+                    }
                     if (data.success) {
                         managerConnected = false;
                         window.setTimeout(
