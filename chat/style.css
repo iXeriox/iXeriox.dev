@@ -3765,3 +3765,11 @@ select:focus-visible {
     font-size:14px;
     line-height:1;
 }
+
+
+.user-address { padding:0; border:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+button.user-name { font-family:var(--mono); }
+button.msg-user { font-weight:700; }
+.user-address:hover:not(:disabled) { text-decoration:underline; text-underline-offset:3px; }
+.user-address:disabled { cursor:default; }
+.message > .user-address { margin-right:8px; }

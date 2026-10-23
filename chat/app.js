@@ -2372,6 +2372,18 @@ createApp({
         |--------------------------------------------------------------------------
         */
 
+        function addressUser(user) {
+            if (isBanned.value || !connected.value) return;
+            const prefix = `${memberLabel(user)}: `;
+            if (!message.value.startsWith(prefix)) message.value = prefix + message.value;
+            showMobileUsers.value = false;
+            nextTick(() => {
+                messageInput.value?.focus();
+                const end = message.value.length;
+                messageInput.value?.setSelectionRange(end, end);
+            });
+        }
+
         function toggleMultiline() {
             if (isBanned.value || !connected.value) return;
             const start = messageInput.value?.selectionStart ?? message.value.length;
@@ -2596,6 +2608,7 @@ createApp({
             messageInput,
             multiline,
             toggleMultiline,
+            addressUser,
             formatMessage,
             messageKeydown,
             sendMessage,
