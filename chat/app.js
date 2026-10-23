@@ -322,6 +322,21 @@ function styledMessageParts(value, styles = {}, depth = 0) {
     return parts;
 }
 
+function normalizeRoomListing(room) {
+    if (!room || typeof room.name !== "string" || !room.name.trim()) return null;
+    return {
+        ...room,
+        roomName: String(room.chatTitle || room.roomName || room.name),
+        topic: String(room.chatTopic ?? room.topic ?? ""),
+        memberCount: Math.max(0, Number(room.memberCount) || 0)
+    };
+}
+
+function matchingRooms(rooms, query) {
+    const search = String(query || "").trim().toLowerCase();
+    return rooms.filter(room => `${room.roomName} ${room.name} ${room.topic}`.toLowerCase().includes(search));
+}
+
 function youtubeVideoId(value) {
     if (typeof value !== "string") return null;
     const text = value.trim();
@@ -430,8 +445,43 @@ createApp({
             if (window.innerWidth > 800) showMobileUsers.value = false;
         }
         watch(currentRoom, () => { showMobileUsers.value = false; });
-        watch(username, () => { showMobileUsers.value = false; });
+        watch(username, () => { showMobileUsers.value = false; showJoinDialog.value = false; });
         const roomSearch = ref("");
+        const chatDialog = ref(null);
+        const chatDialogTab = ref("browse");
+        const createChatName = ref("");
+        const createChatTopic = ref("");
+        const createChatVisibility = ref("public");
+        const chatDialogError = ref("");
+        const joiningRoom = ref(null);
+        let joinRoomTimer = null;
+        let chatDialogTrigger = null;
+
+        function openChatDialog() {
+            chatDialogTrigger = document.activeElement;
+            chatDialogTab.value = "browse";
+            chatDialogError.value = "";
+            showJoinDialog.value = true;
+            if (isSocketReady()) socket.emit("getRooms");
+        }
+
+        watch(showJoinDialog, async open => {
+            await nextTick();
+            const dialog = chatDialog.value;
+            if (open && showJoinDialog.value && dialog && !dialog.open) dialog.showModal();
+            else if (!open) {
+                dialog?.close();
+                chatDialogTrigger?.focus();
+            }
+        });
+
+        function roomAccessLabel(room) {
+            if (room.visibility === "permission") return `Level ${room.requiredLevel || 0}+`;
+            if (room.visibility === "private_users" || room.visibility === "private") return "Private";
+            if (room.visibility === "unlisted") return "Unlisted";
+            return "Public";
+        }
+
         const profileImagesLoaded = ref({});
 
         // messages keyed by room id
@@ -1614,6 +1664,9 @@ createApp({
         }
 
         function logout() {
+            clearTimeout(joinRoomTimer);
+            joiningRoom.value = null;
+            chatDialogError.value = "";
             cleanupSocket();
             clearTimeout(typingTimeout);
 
@@ -1791,7 +1844,8 @@ createApp({
             */
 
             socket.on("rooms", data => {
-                availableRooms.value = Array.isArray(data) ? data : (data.rooms || []);
+                const listings = Array.isArray(data) ? data : data?.rooms;
+                availableRooms.value = (Array.isArray(listings) ? listings : []).map(normalizeRoomListing).filter(Boolean);
                 console.log("[CHAT] Available rooms:", data);
             });
             // [
@@ -1956,7 +2010,20 @@ createApp({
             );
 
             socket.on("joinRoom", data => {
+                if (data?.response === "error" || data?.success === false || !data?.room?.name) {
+                    if (joiningRoom.value) {
+                        clearTimeout(joinRoomTimer);
+                        joiningRoom.value = null;
+                        chatDialogError.value = String(data?.message || data?.error || "Unable to join this chat.");
+                    }
+                    return;
+                }
                 console.log("[CHAT] Joined room:", data.room);
+                if (joiningRoom.value === data.room.name) {
+                    clearTimeout(joinRoomTimer);
+                    joiningRoom.value = null;
+                    showJoinDialog.value = false;
+                }
 
                 const roomId = data.room.name;
                 const alreadyJoined = rooms.value.some(r => r.name === roomId);
@@ -1973,7 +2040,7 @@ createApp({
                 if (!alreadyJoined) {
                     rooms.value.push({
                         name: data.room.name,
-                        roomName: data.room.roomName || known?.roomName || roomId,
+                        roomName: data.room.chatTitle || data.room.roomName || known?.roomName || roomId,
                         owner: data.room.owner || known?.owner || null,
                         topic: extractRoomTopic(data.room, known),
                         raw: mergedRaw,
@@ -1989,7 +2056,7 @@ createApp({
                     });
                 } else {
                     const room = rooms.value.find(r => r.name === roomId);
-                    room.roomName = data.room.roomName || known?.roomName || room.roomName || roomId;
+                    room.roomName = data.room.chatTitle || data.room.roomName || known?.roomName || room.roomName || roomId;
                     room.owner = data.room.owner || known?.owner || room.owner || null;
                     room.topic = extractRoomTopic(data.room, known, room);
                     room.raw = { ...(room.raw || {}), ...mergedRaw };
@@ -2285,15 +2352,22 @@ createApp({
 
         function joinRoom(roomId, isInitial = false) {
             if (!isSocketReady() || !roomId) return;
-
-            socket.emit("joinRoom", {
-                userId: userId.value,
-                room: roomId
-            });
-
-            if (!isInitial) {
+            if (!isInitial && isRoomJoined(roomId)) {
+                switchRoom(roomId);
                 showJoinDialog.value = false;
+                return;
             }
+            if (!isInitial) {
+                if (joiningRoom.value) return;
+                chatDialogError.value = "";
+                joiningRoom.value = roomId;
+                clearTimeout(joinRoomTimer);
+                joinRoomTimer = setTimeout(() => {
+                    joiningRoom.value = null;
+                    chatDialogError.value = "Joining took too long. Please try again.";
+                }, 10000);
+            }
+            socket.emit("joinRoom", { userId: userId.value, room: roomId });
         }
 
         function switchRoom(roomName) {
@@ -2333,13 +2407,7 @@ createApp({
             return rooms.value.some(r => r.name === roomId);
         }
 
-        const filteredRooms = computed(() => {
-            const search = (roomSearch.value || "").toLowerCase();
-
-            return availableRooms.value.filter(
-                room => room.roomName && room.roomName.toLowerCase().includes(search)
-            );
-        });
+        const filteredRooms = computed(() => matchingRooms(availableRooms.value, roomSearch.value));
 
         /*
         |--------------------------------------------------------------------------
@@ -2557,6 +2625,7 @@ createApp({
             manageChannel = null;
             closeDiscordPopup();
             clearTimeout(typingTimeout);
+            clearTimeout(joinRoomTimer);
             cleanupSocket();
         });
 
@@ -2592,6 +2661,15 @@ createApp({
             currentRoomTopic,
             inARoom,
             showJoinDialog,
+            chatDialog,
+            chatDialogTab,
+            openChatDialog,
+            roomAccessLabel,
+            chatDialogError,
+            joiningRoom,
+            createChatName,
+            createChatTopic,
+            createChatVisibility,
             showMobileUsers,
             mobileUsersDialog,
             roomSearch,
