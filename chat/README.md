@@ -104,3 +104,14 @@ room's typing users are highlighted orange in the desktop and mobile users lists
 including their names and avatar/status indicators. No typing text is shown. The stop-typing debounce
 retains the original room even when the sender switches tabs. V2 handles the
 explicit `runCommand: stopTyping` action and retains its idle timeout fallback.
+
+## Permission save confirmation
+
+The manager submits changes through the chat page's authenticated
+`roomAdminCommand` event with a unique `requestId`. V2 serializes administration
+writes per room and sends `roomAdministrationResult` only after persistence
+succeeds or rolls back. The popup locks permission controls while saving and
+shows the actual outcome. Disconnects or missing confirmations are reported as
+unconfirmed; they are never displayed as saved. Owner assignments are retained
+on server startup, including metadata/admin-data fields returned as JSON strings.
+Both website and V2 updates are required for this confirmation protocol.
