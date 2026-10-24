@@ -684,7 +684,7 @@ session_start();
                                 <small>{{ roomAccessLabel(room) }} · {{ room.memberCount }} {{ room.memberCount === 1 ? 'member' : 'members' }}</small>
                             </div>
                             <button type="button" class="join-button" :class="{joined: isRoomJoined(room.name)}" :disabled="!connected || Boolean(joiningRoom) || creatingChat" @click="joinRoom(room.name)">
-                                {{ joiningRoom === room.name ? 'Joining…' : isRoomJoined(room.name) ? 'Open chat' : 'Join chat' }}
+                                {{ joiningRoom === room.name ? 'Joining…' : isRoomJoined(room.name) ? 'Joined' : 'Join chat' }}
                             </button>
                         </article>
                         <div v-if="!filteredRooms.length" class="empty-search">

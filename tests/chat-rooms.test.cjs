@@ -6,7 +6,7 @@ const context=vm.createContext({Vue:{createApp:()=>({mount(){}})}});
 vm.runInContext(source,context);
 
 test('server chatTitle and chatTopic become searchable display fields',()=>{
- const room=context.normalizeRoomListing({name:'internal-id',chatTitle:'Development',chatTopic:'Build and test',memberCount:3,visibility:'private_users'});
+ const room=context.normalizeRoomListing({iXChat:true,name:'internal-id',chatTitle:'Development',chatTopic:'Build and test',memberCount:3,visibility:'private_users'});
  assert.equal(room.roomName,'Development');assert.equal(room.topic,'Build and test');assert.equal(room.name,'internal-id');assert.equal(room.memberCount,3);
  for(const query of ['development','TEST','internal-id','  Build  ',''])assert.equal(context.matchingRooms([room],query).length,1);
  assert.equal(context.matchingRooms([room],'missing').length,0);
@@ -23,7 +23,7 @@ test('legacy listings fall back safely; malformed rooms are discarded',()=>{
 
 test('creation payload matches V2 fields and keeps display name separate from address',()=>{
  const request=context.createRoomRequest('  Weekend gaming  ','','**Welcome**','private');
- assert.deepEqual(JSON.parse(JSON.stringify(request)),{name:'weekend-gaming',chatTitle:'Weekend gaming',chatTopic:'**Welcome**',visibility:'private'});
+ assert.deepEqual(JSON.parse(JSON.stringify(request)),{name:'weekend-gaming',chatTitle:'Weekend gaming',chatTopic:'**Welcome**',visibility:'private',iXChat:true});
  assert.equal(context.createRoomRequest('Café chat','Custom_123','','public').name,'Custom_123');
  assert.equal(context.suggestedRoomId('Café chat'),'cafe-chat');
  assert.equal(context.suggestedRoomId('a'.repeat(100)).length,64);
@@ -34,4 +34,11 @@ test('invalid creation requests are rejected before emission',()=>{
   assert.throws(()=>context.createRoomRequest(...args));
  }
  assert.equal(context.createRoomRequest('Chat','chat','','invite').visibility,'invite');
+});
+
+
+test('finder only includes explicit iXChat rooms, including metadata flags',()=>{
+ const listings=[{name:'yes',iXChat:true},{name:'meta',metadata:{iXChat:true}},{name:'no',iXChat:false},{name:'missing'},{name:'string',iXChat:'true'},{name:'overridden',iXChat:false,metadata:{iXChat:true}}].map(context.normalizeRoomListing);
+ assert.deepEqual(Array.from(context.matchingRooms(listings,''),r=>r.name),['yes','meta']);
+ assert.equal(context.matchingRooms(listings,'missing').length,0);
 });

@@ -413,6 +413,7 @@ function normalizeRoomListing(room) {
     if (!room || typeof room.name !== "string" || !room.name.trim()) return null;
     return {
         ...room,
+        iXChat: (room.iXChat ?? room.metadata?.iXChat ?? room.rawData?.metadata?.iXChat) === true,
         roomName: String(room.chatTitle || room.roomName || room.name),
         topic: String(room.chatTopic ?? room.topic ?? ""),
         memberCount: Math.max(0, Number(room.memberCount) || 0)
@@ -431,12 +432,12 @@ function createRoomRequest(title, id, topic, visibility) {
     if (!/^[a-zA-Z0-9_-]{1,64}$/.test(name)) throw new Error("Choose a room address using 1–64 letters, numbers, hyphens or underscores.");
     if (!["public", "private", "invite"].includes(visibility)) throw new Error("Choose who can join this chat.");
     if (String(topic || "").length > 500) throw new Error("Keep the topic within 500 characters.");
-    return { name, chatTitle, chatTopic: String(topic || "").trim(), visibility };
+    return { name, chatTitle, chatTopic: String(topic || "").trim(), visibility, iXChat: true };
 }
 
 function matchingRooms(rooms, query) {
     const search = String(query || "").trim().toLowerCase();
-    return rooms.filter(room => `${room.roomName} ${room.name} ${room.topic}`.toLowerCase().includes(search));
+    return rooms.filter(room => room.iXChat === true && `${room.roomName} ${room.name} ${room.topic}`.toLowerCase().includes(search));
 }
 
 function youtubeVideoId(value) {
