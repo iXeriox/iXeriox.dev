@@ -773,6 +773,7 @@ session_start();
                         >
                             <header>
                                 <strong>{{ privilegeClass.name }}</strong>
+                                <span v-if="isRequiredPrivilegeClass(privilegeClass)" class="perm-default-badge">Required</span>
                                 <span v-if="currentRoomObj?.raw?.defaultPrivilegeClass === privilegeClass.name" class="perm-default-badge">Default</span>
                             </header>
 
@@ -788,7 +789,7 @@ session_start();
                                 </label>
                                 <button type="button" :disabled="adminBusy" @click="setDefaultPrivilegeClass(privilegeClass.name)">Default</button>
                                 <button type="button" :disabled="adminBusy" @click="renamePrivilegeClass(privilegeClass.name)">Rename</button>
-                                <button type="button" class="danger" :disabled="adminBusy || currentPrivilegeClasses.length <= 1" @click="deletePrivilegeClass(privilegeClass.name)">Delete</button>
+                                <button type="button" class="danger" :disabled="adminBusy || currentPrivilegeClasses.length <= 1 || isRequiredPrivilegeClass(privilegeClass)" :title="isRequiredPrivilegeClass(privilegeClass) ? 'Required class: order -1 and 0 cannot be deleted' : 'Delete class'" @click="deletePrivilegeClass(privilegeClass.name)">Delete</button>
                             </div>
 
                             <div class="perm-permission-grid">

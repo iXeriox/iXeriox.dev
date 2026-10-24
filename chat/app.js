@@ -110,6 +110,10 @@ function roomPrivilegeClasses(room) {
     );
 }
 
+function isRequiredPrivilegeClass(definition) {
+    return definition?.order != null && definition.order !== "" && [-1, 0].includes(Number(definition.order));
+}
+
 function roomClassEntries(room) {
     return Object.entries(roomPrivilegeClasses(room))
         .map(([name, definition]) => ({
@@ -1347,6 +1351,10 @@ createApp({
         }
 
         function deletePrivilegeClass(className) {
+            if (isRequiredPrivilegeClass(roomPrivilegeClasses(currentRoomObj.value)[className])) {
+                adminError.value = "Classes at order -1 and 0 are required and cannot be deleted.";
+                return;
+            }
             if (
                 window.confirm(
                     `Delete "${className}"? Assigned users will return to the default class.`
@@ -2927,6 +2935,7 @@ createApp({
             createPrivilegeClass,
             renamePrivilegeClass,
             deletePrivilegeClass,
+            isRequiredPrivilegeClass,
             setPrivilegeClassOrder,
             toggleClassPermission,
             setUserClass,

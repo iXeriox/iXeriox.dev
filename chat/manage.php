@@ -122,6 +122,7 @@ $encodedRoom = json_encode(
         .assignment-count{margin-bottom:12px}.member-assignment{display:flex;flex-direction:column;gap:6px;min-width:0}
         .assignment-reset{align-self:flex-start;padding:4px 0;border:0;background:none;color:var(--cyan);font-size:11px}.assignment-reset:disabled{color:var(--muted);opacity:.6;cursor:default}
         .member-info>span:last-child{min-width:0}.member-name{display:block}.member-id{overflow-wrap:anywhere}
+        .class-actions button:disabled{opacity:.45;cursor:not-allowed}
         button:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
         @media(max-width:1000px){.permission-workspace{grid-template-columns:1fr}.class-navigation{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:260px}}
         @media(max-width:480px){.assignment-filters{grid-template-columns:1fr}.member{grid-template-columns:minmax(0,1fr)}.member-assignment{width:100%}}
@@ -299,6 +300,10 @@ $encodedRoom = json_encode(
                 "chat.delete": ["Administration", "Delete room", "Permanently delete the room."]
             };
             let selectedClass = null;
+
+            function isRequiredPrivilegeClass(definition) {
+                return definition?.order != null && definition.order !== "" && [-1, 0].includes(Number(definition.order));
+            }
 
             function assignedMemberClass(member) {
                 return state.userPrivilegeClasses?.[member.id] ??
@@ -619,6 +624,7 @@ $encodedRoom = json_encode(
                     ...classes.filter(([name]) => name === selectedClass).map(([className, definition]) => {
                         const card = document.createElement("article");
                         card.className = "class-card";
+                        const requiredClass = isRequiredPrivilegeClass(definition);
 
                         const head = document.createElement("div");
                         head.className = "class-head";
@@ -630,6 +636,12 @@ $encodedRoom = json_encode(
                         order.className = "class-order";
                         order.textContent = `Order ${definition.order}`;
                         title.append(strong, order);
+                        if (requiredClass) {
+                            const required = document.createElement("span");
+                            required.className = "default-badge";
+                            required.textContent = "Required";
+                            title.append(required);
+                        }
 
                         if (state.defaultPrivilegeClass === className) {
                             const badge = document.createElement("span");
@@ -641,10 +653,12 @@ $encodedRoom = json_encode(
                         const actions = document.createElement("div");
                         actions.className = "class-actions";
 
-                        const makeButton = (label, handler, danger = false) => {
+                        const makeButton = (label, handler, danger = false, disabled = false) => {
                             const button = document.createElement("button");
                             button.type = "button";
                             button.textContent = label;
+                            button.disabled = disabled;
+                            if (disabled) button.title = "Required class: orders -1 and 0 cannot be deleted.";
                             if (danger) button.className = "danger";
                             button.addEventListener("click", handler);
                             return button;
@@ -681,13 +695,17 @@ $encodedRoom = json_encode(
                                 }
                             }),
                             makeButton("Delete", () => {
+                                if (isRequiredPrivilegeClass(state.privilegeClasses?.[className])) {
+                                    notify("Classes at order -1 and 0 are required and cannot be deleted.");
+                                    return;
+                                }
                                 if (confirm(`Delete "${className}"?`)) {
                                     send("adminCommand", {
                                         arguments:
                                             `class delete ${className}`
                                     });
                                 }
-                            }, true)
+                            }, true, requiredClass)
                         );
 
                         head.append(title, actions);
