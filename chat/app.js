@@ -384,7 +384,7 @@ function messageContentParts(value) {
     const links = [];
     let previewCount = 0;
     // Protect URLs before formatting; message text is never interpreted as HTML.
-    const protectedText = text.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s<>]+)\)|https?:\/\/[^\s<>"']+/gi, (raw, label, destination, offset) => {
+    const protectedText = text.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s<>]+)\)|https?:\/\/[^\s<>"'()]+\([^()\r\n]+\)|https?:\/\/[^\s<>"']+/gi, (raw, label, destination, offset) => {
         const link = parsedMessageLink(destination || raw, label, text.slice(0, offset));
         if (!link) return raw;
         const image = link.image && previewCount < 4;
@@ -2910,6 +2910,7 @@ createApp({
             failedMessageImages,
             messageImageFailed,
             styledMessageParts,
+            messageContentParts,
             formatWhoisDate,
             decodeProfileText,
 

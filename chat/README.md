@@ -86,3 +86,7 @@ selection. Common shortcodes such as `:smile:`, `:thumbsup:`, `:heart:` and
 are restricted to HTTP/HTTPS, and message text never becomes raw HTML. Links
 open `/chat/link.php` in a new tab, showing the actual destination hostname and
 URL before the user chooses Continue. No automatic redirect occurs.
+
+Labelled links also accept spaces and apostrophes, for example
+`https://infini9.net(Infini9's Chat Server)`. Topics use the same link and emoji
+parser as messages, while retaining bold, italic, underline and line breaks.

@@ -292,11 +292,10 @@ session_start();
                     <div class="messages-wrapper">
                         <section v-if="currentRoomTopic" class="chat-topic" aria-label="Chat topic">
                             <span class="chat-topic-label">Topic</span>
-                            <div class="chat-topic-text"><span
-                                v-for="(part, index) in styledMessageParts(currentRoomTopic)"
-                                :key="index"
-                                :class="{'message-bold': part.bold, 'message-italic': part.italic, 'message-underline': part.underline}"
-                            >{{ part.text }}</span></div>
+                            <div class="chat-topic-text"><template v-for="(part, index) in messageContentParts(currentRoomTopic)" :key="index">
+                                <a v-if="part.href" :href="messageLinkHref(part.href)" target="_blank" rel="noopener noreferrer" :class="{'message-link': true, 'message-bold': part.bold, 'message-italic': part.italic, 'message-underline': part.underline}">{{ part.text }}</a>
+                                <span v-else :class="{'message-bold': part.bold, 'message-italic': part.italic, 'message-underline': part.underline}">{{ part.text }}</span>
+                            </template></div>
                         </section>
                         <section
                             class="messages"
