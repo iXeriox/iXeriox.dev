@@ -41,3 +41,15 @@ test('emoji picker replaces selection and restores focus at Unicode cursor posit
  const start=source.indexOf('        function insertEmoji(');vm.runInContext(source.slice(start,source.indexOf('        function messageImageFailed(',start)),state);
  state.insertEmoji('👩🏽‍💻');assert.equal(state.message.value,'hi 👩🏽‍💻');assert(focused);assert.equal(state.showEmojiPicker.value,false);assert.equal(state.selection[0],state.message.value.length);
 });
+
+
+test('URL labels accept spaces and apostrophes without swallowing following text',()=>{
+ for(const text of ["https://infini9.net(Infini9's Chat Server)", "[Infini9's Chat Server](https://infini9.net)"]){
+  const p=parts(text);assert.equal(p.length,1);assert.equal(p[0].text,"Infini9's Chat Server");assert.equal(p[0].href,'https://infini9.net/');
+ }
+ const p=parts("See **https://infini9.net(Infini9's Chat Server)** and https://example.com(Another site).");
+ const links=p.filter(part=>part.href);
+ assert.equal(links.length,2);assert.equal(links[0].text,"Infini9's Chat Server");assert.equal(links[0].bold,true);
+ assert.equal(links[1].text,'Another site');assert.equal(p.at(-1).text,'.');
+ assert.equal(parts('https://en.wikipedia.org/wiki/Example_(test)')[0].href,'https://en.wikipedia.org/wiki/Example_(test)');
+});
