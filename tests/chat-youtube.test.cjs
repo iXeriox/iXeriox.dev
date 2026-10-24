@@ -21,64 +21,54 @@ test('reads server data as IDs, URLs, objects or lists and filters invalid entri
     assert.equal(context.youtubeItems({data:{videoId:'M7lc1UVf-VE'}})[0].id, 'M7lc1UVf-VE');
 });
 
-test('play replaces the list, AddQueue preserves order and starts an idle player', () => {
-    const first = {id:'M7lc1UVf-VE'}, second = {id:'aqz-KE-bpKQ'};
-    const state = {current:null,queue:[]};
-    const started = context.updateYoutubeQueue(state,[first,second]);
-    assert.equal(started.current, first);
-    assert.deepEqual(json(started.queue),[second]);
-    const appended = context.updateYoutubeQueue(started,[first]);
-    assert.deepEqual(json(appended.queue),[second,first]);
-    const replaced = context.updateYoutubeQueue(appended,[second],true);
-    assert.equal(replaced.current,second);
-    assert.equal(replaced.queue.length,0);
-    assert.equal(state.current,null);
-    assert.equal(context.updateYoutubeQueue(started,[]),started);
-});
-
 function roomPlayer() {
     let timer;
     const state = vm.createContext({
-        ref:value=>({value}),
-        computed:fn=>({get value(){return fn();}}),
-        watch() {}, showMobileUsers:{value:false},
+        ref:value=>({value}), computed:fn=>({get value(){return fn();}}), watch() {},
+        showMobileUsers:{value:false}, canControlYoutube:{value:true},
         rooms:{value:[{name:'one'},{name:'two'}]}, currentRoom:{value:'one'},
-        youtubeItems:context.youtubeItems, updateYoutubeQueue:context.updateYoutubeQueue,
+        youtubeItems:context.youtubeItems, youtubeVideoId:context.youtubeVideoId,
+        nextTick:fn=>fn(), isSocketReady:()=>true, commands:[],
         setTimeout(fn,ms){timer={fn,ms};return 1;}, clearTimeout(){timer=null;}
     });
+    state.socket={emit(event,data){state.commands.push({event,data});}};
     const start=source.indexOf('        const youtubeByRoom = ref(');
     const end=source.indexOf('        const mediaByRoom = ref(',start);
     vm.runInContext(source.slice(start,end),state);
     return {state, get timer(){return timer;}, current:()=>vm.runInContext('youtubeState.value',state)};
 }
+const snapshot=(room,token,revision=1)=>({room,current:{id:'M7lc1UVf-VE',title:'Test',token},queue:[],position:12,playing:false,revision,epoch:'server',serverNow:Date.now()});
 
-test('server handlers isolate room queues and ignore rooms not joined', () => {
-    const player=roomPlayer(), s=player.state;
-    s.playYoutube({room:'one',data:'M7lc1UVf-VE'});
-    s.AddQueue({room:'one',data:'aqz-KE-bpKQ'});
-    s.playYoutube({room:'two',data:'aqz-KE-bpKQ'});
-    assert.equal(player.current().current.id,'M7lc1UVf-VE');
-    s.playYoutube({room:'unknown',data:'aqz-KE-bpKQ'});
-    assert.equal(vm.runInContext('youtubeByRoom.value.unknown',s),undefined);
-    s.nextYoutube();
-    assert.equal(player.current().current.id,'aqz-KE-bpKQ');
-    s.currentRoom.value='two';
-    assert.equal(player.current().current.id,'aqz-KE-bpKQ');
-});
-
-test('idle closes after five minutes, interactions reset it, playing disables it', () => {
+test('only server snapshots change playback; room state and revisions are isolated', () => {
     const player=roomPlayer(),s=player.state;
     s.playYoutube('M7lc1UVf-VE');
-    assert.equal(player.timer.ms,300000);
-    const oldTimer=player.timer;
-    s.resetYoutubeIdle();
-    assert.notEqual(player.timer,oldTimer);
-    vm.runInContext('youtubePlaying = true',s);
-    s.resetYoutubeIdle();
-    assert.equal(player.timer,null);
-    assert(player.current().current);
-    vm.runInContext('youtubePlaying = false',s);
-    s.resetYoutubeIdle();
-    player.timer.fn();
+    assert.equal(s.commands[0].event,'youtubeControl');assert.equal(s.commands[0].data.action,'load');
     assert.equal(player.current().current,null);
+    s.applyYoutubeSnapshot(snapshot('one','first',2));
+    s.applyYoutubeSnapshot(snapshot('two','second'));
+    assert.equal(player.current().current.token,'first');
+    s.applyYoutubeSnapshot(snapshot('one','stale',1));
+    assert.equal(player.current().current.token,'first');
+    s.applyYoutubeSnapshot(snapshot('unknown','bad'));
+    assert.equal(vm.runInContext('youtubeByRoom.value.unknown',s),undefined);
+    s.currentRoom.value='two';assert.equal(player.current().current.token,'second');
+});
+
+test('closing or idling hides only this video locally; future snapshots do not reopen it', () => {
+    const player=roomPlayer(),s=player.state;
+    s.applyYoutubeSnapshot(snapshot('one','first'));
+    s.resetYoutubeIdle();assert.equal(player.timer.ms,300000);
+    vm.runInContext('youtubePlaying = true',s);s.resetYoutubeIdle();assert.equal(player.timer,null);
+    vm.runInContext('youtubePlaying = false',s);s.resetYoutubeIdle();player.timer.fn();
+    assert.equal(player.current().current,null);assert.equal(s.commands.length,0);
+    s.applyYoutubeSnapshot(snapshot('one','first',2));assert.equal(player.current().current,null);
+    s.applyYoutubeSnapshot(snapshot('one','next',3));assert.equal(player.current().current.token,'next');
+});
+
+test('server timestamps account for playback age and local clock offset', () => {
+    const state={position:10,playing:true,serverNow:10000,receivedAt:20000,current:{duration:50}};
+    assert.equal(context.youtubePlaybackPosition(state,23000,null),13);
+    assert.equal(context.youtubePlaybackPosition(state,23000,10000),13);
+    assert.equal(context.youtubePlaybackPosition({...state,playing:false},23000,10000),10);
+    assert.equal(context.youtubePlaybackPosition(state,99000,10000),50);
 });
