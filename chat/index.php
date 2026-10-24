@@ -182,7 +182,9 @@ session_start();
                 </button>
                 <button
                     class="join-room-button"
-                    @click="showJoinDialog = true"
+                    aria-label="Find or create a chat"
+                    title="Find or create a chat"
+                    @click="openChatDialog"
                 >
                     +
                 </button>
@@ -272,7 +274,7 @@ session_start();
 
                         <button
                             class="big-join-button"
-                            @click="showJoinDialog = true"
+                            @click="openChatDialog"
                         >
                             Join a Chat
                         </button>
@@ -659,81 +661,6 @@ session_start();
             <!-- JOIN CHAT MODAL -->
             <!-- ========================================================= -->
 
-<<<<<<< HEAD
-            <div
-                v-if="showJoinDialog"
-                class="join-overlay"
-                @click.self="showJoinDialog = false"
-            >
-
-<div class="join-modal">
-
-    <div class="join-header">
-
-        <div>
-
-            <h2>Join a Chat</h2>
-
-            <p>Browse and join public chat rooms.</p>
-
-        </div>
-
-        <button
-            class="modal-close"
-            @click="showJoinDialog = false"
-        >
-            ×
-        </button>
-
-    </div>
-
-    <div class="join-search">
-
-        <input
-            v-model="roomSearch"
-            placeholder="Search rooms..."
-            autocomplete="off"
-        >
-
-    </div>
-
-<div class="join-room-list">
-  <template v-for="room in availableRooms" :key="room.name">
-    <div
-      v-if="room.visibility === 'private_users' && room.metadata?.iXChat"
-      class="join-room-card"
-    >
-      <div class="join-room-info">
-        <h3>#{{ room.chatTitle || room.name }}</h3>
-
-        <small>
-          {{ room }}
-        </small>
-      </div>
-
-      <button
-        class="join-button"
-        :class="{ joined: isRoomJoined(room.name) }"
-        :disabled="isRoomJoined(room.name)"
-        @click="joinRoom(room.name)"
-      >
-        {{ isRoomJoined(room.name) ? "Joined" : "Join" }}
-      </button>
-    </div>
-  </template>
-
-  <div
-    v-if="
-      !availableRooms.some(
-        room => room.visibility === 'private_users' && room.metadata?.iXChat
-      )
-    "
-    class="empty-search"
-  >
-    No rooms found.
-  </div>
-</div>
-=======
             <dialog ref="chatDialog" class="chat-discovery-dialog" aria-labelledby="chat-discovery-title"
                 @close="showJoinDialog = false" @click.self="showJoinDialog = false">
                 <div class="join-header">
@@ -783,7 +710,6 @@ session_start();
                     </fieldset>
                 </form>
             </dialog>
->>>>>>> e8982f93cb3669bf3b0c2422f54062631b599959
 
             <!-- ========================================================= -->
             <!-- PERMISSIONS PANEL -->
@@ -954,7 +880,7 @@ session_start();
                 </div>
 
             </div>
-</div>                </div>
+
 
             </div>
 
