@@ -798,6 +798,7 @@ createApp({
         const failedMessageImages = ref({});
         const multiline = ref(false);
 
+        const pendingAdminUpdates = new Map();
         let socket = null;
         let typingTimeout = null;
         let discordPopup = null;
@@ -1111,17 +1112,22 @@ createApp({
                     }
                 };
 
-            if (
-                payload.command === "adminCommand" ||
-                payload.command === "chatCommand"
-            ) {
+            if (payload.command === "adminCommand") {
+                const requestId = commandPayload.data.clientMessageId;
+                const timer = setTimeout(() => {
+                    const pending = pendingAdminUpdates.get(requestId);
+                    if (!pending) return;
+                    pendingAdminUpdates.delete(requestId);
+                    pending.reply({ type: "ixeriox:manage-result", room: room.name, command: "adminCommand", success: false, message: "The server did not confirm saving the permissions. Refresh before retrying." });
+                }, 15000);
+                pendingAdminUpdates.set(requestId, { room: room.name, reply, timer });
+                socket.emit("roomAdminCommand", { room: room.name, arguments: payload.data?.arguments || "", requestId });
+                return;
+            }
+
+            if (payload.command === "chatCommand") {
                 socket.emit("runCommand", commandPayload);
-                reply({
-                    type: "ixeriox:manage-result",
-                    room: room.name,
-                    success: true,
-                    message: "Room update submitted."
-                });
+                reply({ type: "ixeriox:manage-result", room: room.name, success: true, message: "Room command submitted." });
                 return;
             }
 
@@ -2013,6 +2019,7 @@ createApp({
                 logout();
             });
             socket.on("disconnect", reason => {
+                cancelPendingAdminUpdates();
                 console.warn("[CHAT] Disconnected:", reason);
 
                 // Just reflect the dropped state here — socket.io is already
@@ -2166,6 +2173,14 @@ createApp({
 
                 rooms.value = rooms.value.map(updateTopic);
                 availableRooms.value = availableRooms.value.map(updateTopic);
+            });
+
+            socket.on("roomAdministrationResult", data => {
+                const pending = pendingAdminUpdates.get(data?.requestId);
+                if (!pending || pending.room !== data.room) return;
+                clearTimeout(pending.timer);
+                pendingAdminUpdates.delete(data.requestId);
+                pending.reply({ type: "ixeriox:manage-result", room: data.room, command: "adminCommand", success: data.success === true, message: data.message || (data.success ? "Permissions saved." : "Could not save permissions.") });
             });
 
             socket.on(
@@ -2591,7 +2606,16 @@ createApp({
             });
         }
 
+        function cancelPendingAdminUpdates() {
+            for (const pending of pendingAdminUpdates.values()) {
+                clearTimeout(pending.timer);
+                pending.reply({ type: "ixeriox:manage-result", room: pending.room, command: "adminCommand", success: false, message: "Connection closed before saving was confirmed. Refresh to check the saved permissions." });
+            }
+            pendingAdminUpdates.clear();
+        }
+
         function cleanupSocket() {
+            cancelPendingAdminUpdates();
             if (!socket) return;
 
             try {

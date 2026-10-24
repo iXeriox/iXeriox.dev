@@ -205,7 +205,8 @@ $encodedRoom = json_encode(
                 </div>
                 <div class="actions" style="margin-top:0;padding-top:0;border-top:0"><button class="primary" type="button" data-add-class>Add class</button></div>
                 </details>
-                <p class="hint permission-save-hint">Changes are sent immediately. The server confirms each update.</p>
+                <p class="hint permission-save-hint">Changes are saved when the server confirms them.</p>
+                <p class="hint" data-permission-save-status role="status" aria-live="polite"></p>
                 <div class="permission-workspace">
                     <nav class="class-navigation" data-class-navigation aria-label="Choose a privilege class"></nav>
                     <div class="class-list" data-classes><div class="empty">Waiting for privilege classes...</div></div>
@@ -300,6 +301,7 @@ $encodedRoom = json_encode(
                 "chat.delete": ["Administration", "Delete room", "Permanently delete the room."]
             };
             let selectedClass = null;
+            let pendingAdminCommand = false;
 
             function isRequiredPrivilegeClass(definition) {
                 return definition?.order != null && definition.order !== "" && [-1, 0].includes(Number(definition.order));
@@ -407,12 +409,23 @@ $encodedRoom = json_encode(
                 return result;
             }
 
+            function applyPermissionPending() {
+                if (!pendingAdminCommand) return;
+                $$(".permission-item input, .member-assignment select, .assignment-reset, .class-actions button, [data-add-class], #new-class-name, #new-class-order").forEach(control => { control.disabled = true; });
+            }
+
             function send(command, data = {}) {
                 if (!managerConnected) {
                     notify("The connected chat session is unavailable.");
                     return;
                 }
 
+                if (command === "adminCommand") {
+                    if (pendingAdminCommand) return;
+                    pendingAdminCommand = true;
+                    $("[data-permission-save-status]").textContent = "Saving permissions…";
+                    applyPermissionPending();
+                }
                 const payload = {
                     type: "ixeriox:manage-command",
                     room,
@@ -465,6 +478,7 @@ $encodedRoom = json_encode(
                 renderClassFilter();
                 renderClasses();
                 renderMembers();
+                applyPermissionPending();
             }
 
             function showConnectionWarning() {
@@ -585,6 +599,7 @@ $encodedRoom = json_encode(
                     row.append(info, assignment, kick);
                     return row;
                 }));
+                applyPermissionPending();
             }
 
             function renderClasses() {
@@ -744,6 +759,7 @@ $encodedRoom = json_encode(
                         return card;
                     })
                 );
+                applyPermissionPending();
             }
 
             $$("[data-tab]").forEach(tab => tab.addEventListener("click", () => {
@@ -805,6 +821,15 @@ $encodedRoom = json_encode(
 
                 if (data?.type === "ixeriox:manage-result" && data.room === room) {
                     clearTimeout(connectionTimer);
+                    if (data.command === "adminCommand") {
+                        pendingAdminCommand = false;
+                        $("[data-permission-save-status]").textContent = data.success ? "Permissions saved." : (data.message || "Permissions could not be saved.");
+                        $("#new-class-name").disabled = false;
+                        $("#new-class-order").disabled = false;
+                        $("[data-add-class]").disabled = false;
+                        renderClasses();
+                        renderMembers();
+                    }
 
                     if (!managerConnected && data.success === false) {
                         refuseAccess(
