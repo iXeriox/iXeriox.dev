@@ -1,47 +1,50 @@
-# YouTube chat player
+# Music listening sessions
 
-Room managers (owners, site staff, or classes with `chat.settings` or
-`chat.privilegeClasses.manage`) control a server-authoritative playlist. All
-joined viewers follow the same video, play/pause state and position. Viewers
-request a snapshot every three seconds; timestamps correct network delay and
-clock differences. Rejoining or switching rooms fetches the current snapshot.
+Only the room owner controls shared playback, including through direct
+`youtubeControl` requests. Other room members can opt in to listen.
 
-In a joined room, managers can send `/testyoutube` to start a shared demo with
-one queued video. `/testyoutube VIDEO_ID_OR_URL` chooses the first video. This
-local slash command sends shared playback requests to V2. Local `playYoutube`
-and `AddQueue` helpers also submit shared load/enqueue requests.
-
-```js
-socket.emit('youtubeControl', {
-    room: 'ROOM_ID', action: 'load',
-    data: { id: 'M7lc1UVf-VE', title: 'Example' }
-});
-socket.emit('youtubeControl', {
-    room: 'ROOM_ID', action: 'enqueue',
-    data: [{ url: 'https://youtu.be/aqz-KE-bpKQ', title: 'Next' }]
-});
+```text
+/music play https://youtu.be/VIDEO_ID | Optional track title
+/music add VIDEO_ID | Optional title
+/music pause
+/music resume
+/music skip
+/music seek 90
+/music stop
+/music queue
+/music help
 ```
 
-V2 broadcasts `youtubeState` snapshots. `sync` requests are available to joined
-viewers and echo `clientSentAt` for clock correction. Mutations require manager
-permissions. `play`, `pause`, `seek`, `duration`, `ended` and `next` include the
-current video `token`; play/pause/seek include `position` in seconds. Stale tokens
-are ignored. Every load/queue advancement has a new token, including repeated
-videos. The server advances the queue using duration reported by a manager's
-YouTube player; end notifications cannot double-advance the playlist.
+`/music` also displays help. `/youtube` is an alias. Queue and help are available
+to everyone; playback/queue mutations require room ownership. Skip with no next
+track ends the session. Stop clears playback and its queue for everyone.
 
-The player stays below the users list and also works in the mobile users dialog.
-Closing it (or five idle minutes) hides that video only for the local viewer;
-other viewers and the shared queue continue. A new video reopens the player.
-Autoplay restrictions show a local Start playback button without pausing the
-room. The existing direct-video watch-party code is separate.
+A new listening session shows a non-modal invitation in chat. No YouTube iframe
+or API script is loaded until that viewer clicks Join listening (or uses
+`/music join`). Not now dismisses the popup and leaves a small Join listening
+button. Leave listening, `/music leave`, or five idle minutes opts out locally;
+queued tracks do not force that viewer back in. Joining persists only for the
+current browser session and listening session. Stop followed by Play creates a
+new session and invitation. There is no automatic opt-in, including for owners.
 
-Both website and V2 server updates must be deployed. Shared state lives in server
-memory and resets on server restart. YouTube's iframe API, embeds and media/CDN
-destinations must be reachable. Tests use simulated YouTube players with the real
-sync service; live playback still needs verification on the deployment network.
+Once opted in, viewers follow the server's video, queue, play/pause state and
+position. Snapshots every three seconds correct drift; late joiners catch up.
+The owner's YouTube player reports duration so the server can advance the queue;
+the owner should join listening to host playback. Browsers that block autoplay
+show a local Start playback button. Closing a player never stops other listeners.
+Desktop and mobile players remain below the scrollable users list.
 
-Run client tests with `node --test tests/*.test.cjs`. Server tests use
+The internal protocol is `youtubeControl` with `room`, `action`, and the current
+video `token` for play/pause/seek/next/duration/ended. Load/enqueue accept `data`
+containing video IDs, YouTube URLs or `{id|url|videoId,title?}` objects. Stop clears
+the session. `youtubeState` snapshots include a stable `sessionId` across tracks
+and a new video token on every load/advance, preventing duplicate end reports.
+State lives in V2 memory and resets on server restart. The old `/testyoutube`
+demo still works for owners and still requires explicit listening consent.
+
+Deploy both website and V2 updates. Tests use simulated YouTube players with the
+real synchronization service; live playback needs verification on the deployment
+network. Run `node --test tests/*.test.cjs` in the website checkout and
 `node --test tests/*.test.js` in i9ChatServer.
 
 ## Finding and creating chats
