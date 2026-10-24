@@ -659,6 +659,7 @@ session_start();
             <!-- JOIN CHAT MODAL -->
             <!-- ========================================================= -->
 
+<<<<<<< HEAD
             <div
                 v-if="showJoinDialog"
                 class="join-overlay"
@@ -732,6 +733,57 @@ session_start();
     No rooms found.
   </div>
 </div>
+=======
+            <dialog ref="chatDialog" class="chat-discovery-dialog" aria-labelledby="chat-discovery-title"
+                @close="showJoinDialog = false" @click.self="showJoinDialog = false">
+                <div class="join-header">
+                    <div><h2 id="chat-discovery-title">Find your next conversation</h2><p>Join an existing chat or start one of your own.</p></div>
+                    <button type="button" class="modal-close" aria-label="Close chat finder" @click="showJoinDialog = false">×</button>
+                </div>
+                <div class="chat-discovery-tabs" role="group" aria-label="Chat finder mode">
+                    <button type="button" :aria-pressed="chatDialogTab === 'browse'" @click="chatDialogTab = 'browse'">Find a chat</button>
+                    <button type="button" :aria-pressed="chatDialogTab === 'create'" @click="chatDialogTab = 'create'">Create a chat</button>
+                </div>
+                <p v-if="chatDialogError" class="chat-discovery-error" role="alert">{{ chatDialogError }}</p>
+                <section v-if="chatDialogTab === 'browse'" aria-label="Find chats" class="chat-discovery-browse">
+                    <div class="join-search"><input v-model="roomSearch" type="search" aria-label="Search chats" placeholder="Search by name or topic…" autocomplete="off" autofocus></div>
+                    <p class="chat-discovery-count" aria-live="polite">{{ filteredRooms.length }} {{ filteredRooms.length === 1 ? 'chat' : 'chats' }} available</p>
+                    <p v-if="!connected" class="chat-discovery-error" role="status">Reconnect to join a chat.</p>
+                    <div class="join-room-list">
+                        <article v-for="room in filteredRooms" :key="room.name" class="join-room-card">
+                            <div class="join-room-info">
+                                <h3>#{{ room.roomName }}</h3>
+                                <p v-if="room.topic" class="chat-discovery-topic">{{ room.topic }}</p>
+                                <small>{{ roomAccessLabel(room) }} · {{ room.memberCount }} {{ room.memberCount === 1 ? 'member' : 'members' }}</small>
+                            </div>
+                            <button type="button" class="join-button" :class="{joined: isRoomJoined(room.name)}" :disabled="!connected || Boolean(joiningRoom) || creatingChat" @click="joinRoom(room.name)">
+                                {{ joiningRoom === room.name ? 'Joining…' : isRoomJoined(room.name) ? 'Joined' : 'Join chat' }}
+                            </button>
+                        </article>
+                        <div v-if="!filteredRooms.length" class="empty-search">
+                            <strong>{{ roomSearch.trim() ? 'No matching chats' : 'No chats available yet' }}</strong>
+                            <p>Try another search or start a new conversation.</p>
+                            <button type="button" class="join-button" @click="chatDialogTab = 'create'">Create a chat</button>
+                        </div>
+                    </div>
+                </section>
+                <form v-else class="chat-create" aria-label="Create a chat" @submit.prevent="createChat">
+                    <fieldset :disabled="creatingChat">
+                    <label for="create-chat-name">Chat name</label>
+                    <input id="create-chat-name" v-model="createChatName" maxlength="64" required placeholder="e.g. Weekend gaming" autocomplete="off">
+                    <label for="create-chat-id">Room address</label>
+                    <input id="create-chat-id" v-model="createChatId" maxlength="64" pattern="[A-Za-z0-9_-]{1,64}" :placeholder="createChatIdSuggestion || 'weekend-gaming'" aria-describedby="create-chat-id-help" autocomplete="off">
+                    <p id="create-chat-id-help" class="chat-create-hint">{{ createChatId || createChatIdSuggestion ? '#' + (createChatId || createChatIdSuggestion) : 'Choose a unique address' }} · Letters, numbers, hyphens and underscores.</p>
+                    <label for="create-chat-topic">Topic <small>(optional)</small></label>
+                    <textarea id="create-chat-topic" v-model="createChatTopic" maxlength="500" rows="3" placeholder="What will you talk about?"></textarea>
+                    <label for="create-chat-visibility">Who can join?</label>
+                    <select id="create-chat-visibility" v-model="createChatVisibility"><option value="public">Public</option><option value="private">Private · invited members</option></select>
+                    <p class="chat-create-hint">Your chat will have its own member list and permission classes.</p>
+                    <button type="submit" class="join-button" :disabled="!connected || !createChatName.trim() || Boolean(joiningRoom)">{{ creatingChat ? 'Creating…' : 'Create chat' }}</button>
+                    </fieldset>
+                </form>
+            </dialog>
+>>>>>>> e8982f93cb3669bf3b0c2422f54062631b599959
 
             <!-- ========================================================= -->
             <!-- PERMISSIONS PANEL -->

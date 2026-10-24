@@ -90,3 +90,9 @@ URL before the user chooses Continue. No automatic redirect occurs.
 Labelled links also accept spaces and apostrophes, for example
 `https://infini9.net(Infini9's Chat Server)`. Topics use the same link and emoji
 parser as messages, while retaining bold, italic, underline and line breaks.
+
+The finder only shows rooms explicitly flagged `iXChat: true`. V2 exposes the
+flag from room metadata without sending private metadata. Chats created through
+this UI send `iXChat: true`. Open rooms display “Joined”; selecting one switches
+to its existing tab. The V2 listing update must be deployed before unflagged
+legacy payloads can participate in discovery.
