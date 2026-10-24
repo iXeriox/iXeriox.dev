@@ -433,6 +433,12 @@ session_start();
 
                     </div>
 
+                    <aside v-if="youtubeInvitation" class="music-invitation" aria-label="Listening invitation" aria-live="polite">
+                        <strong>Listen together? 🎵</strong>
+                        <p>{{ canControlYoutube ? 'You started' : 'The room owner started' }} <b>{{ youtubeRoomState.current.title === youtubeRoomState.current.id ? 'a YouTube track' : youtubeRoomState.current.title }}</b>. Join to listen in sync. You can leave anytime.</p>
+                        <div><button type="button" class="music-join" @click="joinYoutubeListening">Join listening</button><button type="button" @click="dismissYoutubeInvitation">Not now</button></div>
+                    </aside>
+
                     <TransitionGroup name="system-notice" tag="aside" class="system-notice-tray">
                         <button
                             v-for="notice in systemNotices"
@@ -517,12 +523,12 @@ session_start();
                             <section v-if="youtubeState.current" class="youtube-panel" aria-label="Room YouTube player" @pointerdown="resetYoutubeIdle" @keydown="resetYoutubeIdle">
                                 <div class="youtube-heading">
                                     <strong>YouTube</strong>
-                                    <button type="button" @click="closeYoutube" aria-label="Close YouTube player">×</button>
+                                    <button type="button" @click="closeYoutube" aria-label="Leave listening" title="Leave listening">×</button>
                                 </div>
                                 <div class="youtube-video" ref="youtubeDesktop"></div>
                                 <p class="youtube-title">{{ youtubeState.current.title }}</p>
                                 <p v-if="youtubeError" class="youtube-error" role="status">{{ youtubeError }} <button type="button" @click="mountYoutubePlayer">Retry</button></p>
-                                <small>Synced with room · {{ canControlYoutube ? 'You control playback' : 'Manager controls playback' }}</small>
+                                <small>Synced with room · {{ canControlYoutube ? 'You control playback' : 'Owner controls playback' }}</small>
                                 <button v-if="youtubeAutoplayBlocked" type="button" @click="resumeYoutube">Start playback</button>
                                 <small>Closes locally after 5 minutes idle</small>
                                 <div class="youtube-queue-heading">
@@ -562,6 +568,9 @@ session_start();
                         </button>
 
                         <div class="message-composer">
+                            <div v-if="youtubeRoomState.current && !youtubeListening && !youtubeInvitation" class="music-listen-reminder">
+                                <span>Music is playing in this chat</span><button type="button" @click="joinYoutubeListening">Join listening</button>
+                            </div>
                             <div class="formatting-toolbar" role="group" aria-label="Message formatting">
                                 <button type="button" @click="formatMessage('**')" :disabled="isBanned || !connected" title="Bold" aria-label="Bold"><strong>B</strong></button>
                                 <button type="button" @click="formatMessage('*')" :disabled="isBanned || !connected" title="Italic" aria-label="Italic"><em>I</em></button>
@@ -644,12 +653,12 @@ session_start();
                             <section v-if="youtubeState.current" class="youtube-panel" aria-label="Room YouTube player" @pointerdown="resetYoutubeIdle" @keydown="resetYoutubeIdle">
                                 <div class="youtube-heading">
                                     <strong>YouTube</strong>
-                                    <button type="button" @click="closeYoutube" aria-label="Close YouTube player">×</button>
+                                    <button type="button" @click="closeYoutube" aria-label="Leave listening" title="Leave listening">×</button>
                                 </div>
                                 <div class="youtube-video" ref="youtubeMobile"></div>
                                 <p class="youtube-title">{{ youtubeState.current.title }}</p>
                                 <p v-if="youtubeError" class="youtube-error" role="status">{{ youtubeError }} <button type="button" @click="mountYoutubePlayer">Retry</button></p>
-                                <small>Synced with room · {{ canControlYoutube ? 'You control playback' : 'Manager controls playback' }}</small>
+                                <small>Synced with room · {{ canControlYoutube ? 'You control playback' : 'Owner controls playback' }}</small>
                                 <button v-if="youtubeAutoplayBlocked" type="button" @click="resumeYoutube">Start playback</button>
                                 <small>Closes locally after 5 minutes idle</small>
                                 <div class="youtube-queue-heading">

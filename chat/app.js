@@ -1426,18 +1426,26 @@ createApp({
         */
 
         // YouTube playback and queues are separate from the existing watch party.
-        const canControlYoutube = computed(() => {
-            if (canManageRoom.value) return true;
-            const room = currentRoomObj.value;
-            const self = room?.memberList?.find(member => String(member.id) === String(userId.value)) || { id: userId.value, privilegeClass: room?.raw?.privilegeClass };
-            return roomPrivilegeClasses(room)[memberRoomClass(room, self)]?.permissions?.includes(CHAT_PERMISSIONS.CHANGE_SETTINGS) === true;
-        });
+        const canControlYoutube = computed(() => isOwnerOfCurrentRoom.value);
         const youtubeByRoom = ref({});
-        const youtubeClosedTokens = ref({});
-        const youtubeState = computed(() => {
-            const state = youtubeByRoom.value[currentRoom.value] || { current: null, queue: [] };
-            return state.current && youtubeClosedTokens.value[currentRoom.value] === state.current.token ? { current: null, queue: [] } : state;
-        });
+        const youtubeMembership = ref({});
+        const youtubeDismissedInvites = ref({});
+        const youtubeRoomState = computed(() => youtubeByRoom.value[currentRoom.value] || { current: null, queue: [] });
+        const youtubeListening = computed(() => Boolean(youtubeRoomState.value.current && youtubeRoomState.value.sessionId && youtubeMembership.value[currentRoom.value] === youtubeRoomState.value.sessionId));
+        const youtubeInvitation = computed(() => Boolean(youtubeRoomState.value.current && !youtubeListening.value && youtubeDismissedInvites.value[currentRoom.value] !== youtubeRoomState.value.sessionId));
+        const youtubeState = computed(() => youtubeListening.value ? youtubeRoomState.value : { current: null, queue: [] });
+
+        function joinYoutubeListening() {
+            const sessionId = youtubeRoomState.value.sessionId;
+            if (!sessionId || !youtubeRoomState.value.current) return;
+            youtubeMembership.value = { ...youtubeMembership.value, [currentRoom.value]: sessionId };
+            youtubeDismissedInvites.value = { ...youtubeDismissedInvites.value, [currentRoom.value]: sessionId };
+            requestYoutubeSync();
+        }
+        function dismissYoutubeInvitation() {
+            youtubeDismissedInvites.value = { ...youtubeDismissedInvites.value, [currentRoom.value]: youtubeRoomState.value.sessionId };
+        }
+
         const youtubeDesktop = ref(null);
         const youtubeMobile = ref(null);
         const youtubeError = ref("");
@@ -1475,10 +1483,10 @@ createApp({
         function youtubeControl(action, extra = {}) {
             if (!isSocketReady() || !currentRoom.value) return false;
             if (!canControlYoutube.value) {
-                youtubeError.value = "Room managers control the shared YouTube player.";
+                youtubeError.value = "Only the room owner can control music.";
                 return false;
             }
-            socket.emit("youtubeControl", { room: currentRoom.value, action, token: youtubeState.value.current?.token, ...extra });
+            socket.emit("youtubeControl", { room: currentRoom.value, action, token: youtubeRoomState.value.current?.token, ...extra });
             return true;
         }
 
@@ -1504,6 +1512,7 @@ createApp({
             if (!data?.room || !rooms.value.some(room => room.name === data.room) || !Number.isFinite(data.revision)) return;
             const previous = youtubeByRoom.value[data.room];
             if (previous?.epoch === data.epoch && data.revision < previous.revision) return;
+            if (data.current && typeof data.sessionId !== "string") return;
             if (data.current && (!youtubeVideoId(data.current.id) || typeof data.current.token !== "string")) return;
             if (!Number.isFinite(data.position) || !Number.isFinite(data.serverNow)) return;
             const receivedAt = Date.now();
@@ -1521,8 +1530,10 @@ createApp({
         function nextYoutube() { youtubeControl("next"); }
 
         function closeYoutube() {
-            const token = youtubeState.value.current?.token;
-            if (token) youtubeClosedTokens.value = { ...youtubeClosedTokens.value, [currentRoom.value]: token };
+            const membership = { ...youtubeMembership.value };
+            delete membership[currentRoom.value];
+            youtubeMembership.value = membership;
+            dismissYoutubeInvitation();
         }
 
         function destroyYoutubePlayer() {
@@ -1615,7 +1626,7 @@ createApp({
                         onError() {
                             if (generation !== youtubeGeneration) return;
                             youtubePlaying = false; resetYoutubeIdle();
-                            youtubeError.value = "This video cannot be played here. A room manager can skip it.";
+                            youtubeError.value = "This video cannot be played here. The room owner can skip it.";
                         },
                         onAutoplayBlocked() {
                             if (generation !== youtubeGeneration) return;
@@ -1937,7 +1948,8 @@ createApp({
             reconnectRoomIds = new Set();
             reconnectTargetRoom = null;
             youtubeByRoom.value = {};
-            youtubeClosedTokens.value = {};
+            youtubeMembership.value = {};
+            youtubeDismissedInvites.value = {};
             youtubeClockOffset = null;
             youtubeBestRoundTrip = Infinity;
             mediaByRoom.value = {};
@@ -2706,7 +2718,8 @@ createApp({
             }
 
             delete youtubeByRoom.value[roomName];
-            delete youtubeClosedTokens.value[roomName];
+            delete youtubeMembership.value[roomName];
+            delete youtubeDismissedInvites.value[roomName];
             delete messagesByRoom.value[roomName];
             delete typingByRoom.value[roomName];
             clearRoomActivity(roomName);
@@ -2827,6 +2840,13 @@ createApp({
             const text = message.value.trim();
 
             if (!text || !currentRoom.value || isBanned.value) return;
+            const listenCommand = text.match(/^\/(?:music|youtube)\s+(join|leave)\s*$/i);
+            if (listenCommand) {
+                if (listenCommand[1].toLowerCase() === "join") joinYoutubeListening();
+                else closeYoutube();
+                message.value = "";
+                return;
+            }
             if (/^\/testyoutube(?:\s|$)/i.test(text)) {
                 testYoutube(text.replace(/^\/testyoutube\s*/i, ""));
                 message.value = "";
@@ -3087,6 +3107,11 @@ createApp({
             AddQueue,
             resetYoutubeIdle,
             youtubeState,
+            youtubeRoomState,
+            youtubeListening,
+            youtubeInvitation,
+            joinYoutubeListening,
+            dismissYoutubeInvitation,
             canControlYoutube,
             youtubeAutoplayBlocked,
             resumeYoutube,

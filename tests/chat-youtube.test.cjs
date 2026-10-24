@@ -37,7 +37,7 @@ function roomPlayer() {
     vm.runInContext(source.slice(start,end),state);
     return {state, get timer(){return timer;}, current:()=>vm.runInContext('youtubeState.value',state)};
 }
-const snapshot=(room,token,revision=1)=>({room,current:{id:'M7lc1UVf-VE',title:'Test',token},queue:[],position:12,playing:false,revision,epoch:'server',serverNow:Date.now()});
+const snapshot=(room,token,revision=1)=>({room,sessionId:room+'-session',current:{id:'M7lc1UVf-VE',title:'Test',token},queue:[],position:12,playing:false,revision,epoch:'server',serverNow:Date.now()});
 
 test('only server snapshots change playback; room state and revisions are isolated', () => {
     const player=roomPlayer(),s=player.state;
@@ -45,24 +45,32 @@ test('only server snapshots change playback; room state and revisions are isolat
     assert.equal(s.commands[0].event,'youtubeControl');assert.equal(s.commands[0].data.action,'load');
     assert.equal(player.current().current,null);
     s.applyYoutubeSnapshot(snapshot('one','first',2));
+    assert.equal(player.current().current,null);
+    s.joinYoutubeListening();
     s.applyYoutubeSnapshot(snapshot('two','second'));
     assert.equal(player.current().current.token,'first');
     s.applyYoutubeSnapshot(snapshot('one','stale',1));
     assert.equal(player.current().current.token,'first');
     s.applyYoutubeSnapshot(snapshot('unknown','bad'));
     assert.equal(vm.runInContext('youtubeByRoom.value.unknown',s),undefined);
-    s.currentRoom.value='two';assert.equal(player.current().current.token,'second');
+    s.currentRoom.value='two';assert.equal(player.current().current,null);s.joinYoutubeListening();assert.equal(player.current().current.token,'second');
 });
 
-test('closing or idling hides only this video locally; future snapshots do not reopen it', () => {
+test('listening requires consent; leaving stays opted out across tracks until a new session', () => {
     const player=roomPlayer(),s=player.state;
     s.applyYoutubeSnapshot(snapshot('one','first'));
+    s.joinYoutubeListening();
+    const sent=s.commands.length;
     s.resetYoutubeIdle();assert.equal(player.timer.ms,300000);
     vm.runInContext('youtubePlaying = true',s);s.resetYoutubeIdle();assert.equal(player.timer,null);
     vm.runInContext('youtubePlaying = false',s);s.resetYoutubeIdle();player.timer.fn();
-    assert.equal(player.current().current,null);assert.equal(s.commands.length,0);
+    assert.equal(player.current().current,null);assert.equal(s.commands.length,sent);
     s.applyYoutubeSnapshot(snapshot('one','first',2));assert.equal(player.current().current,null);
-    s.applyYoutubeSnapshot(snapshot('one','next',3));assert.equal(player.current().current.token,'next');
+    s.applyYoutubeSnapshot(snapshot('one','next',3));assert.equal(player.current().current,null);
+    assert.equal(vm.runInContext('youtubeInvitation.value',s),false);
+    s.applyYoutubeSnapshot({...snapshot('one','fresh',4),sessionId:'new-session'});
+    assert.equal(vm.runInContext('youtubeInvitation.value',s),true);
+    s.joinYoutubeListening();assert.equal(player.current().current.token,'fresh');
 });
 
 test('server timestamps account for playback age and local clock offset', () => {
