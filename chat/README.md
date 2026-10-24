@@ -100,7 +100,7 @@ legacy payloads can participate in discovery.
 ## Typing indicators
 
 Typing state is tracked per room with string-normalized user IDs. The current
-room's other typists appear above the composer on desktop and mobile; the mobile
-users popup also highlights typing avatars/status dots. The stop-typing debounce
+room's typing users are highlighted orange in the desktop and mobile users lists,
+including their names and avatar/status indicators. No typing text is shown. The stop-typing debounce
 retains the original room even when the sender switches tabs. V2 handles the
 explicit `runCommand: stopTyping` action and retains its idle timeout fallback.

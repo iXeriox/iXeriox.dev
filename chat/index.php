@@ -499,7 +499,7 @@ session_start();
                                         }"
                                     ></span>
 
-                                    <button type="button" class="user-name user-address" @click="addressUser(user)" :disabled="isBanned || !connected" :title="'Address ' + memberLabel(user)">{{ memberLabel(user) }}</button>
+                                    <button type="button" class="user-name user-address" :class="{'is-typing': isUserTyping(user.id)}" @click="addressUser(user)" :disabled="isBanned || !connected" :title="'Address ' + memberLabel(user)">{{ memberLabel(user) }}</button>
                                     <small v-if="isRoomOwner(currentRoomObj, user)" class="room-owner-badge" title="Room owner" aria-label="Room owner">♛</small>
 
                                 </div>
@@ -562,7 +562,6 @@ session_start();
                         </button>
 
                         <div class="message-composer">
-                            <p v-if="typingUsersText" class="chat-typing-status" role="status" aria-live="polite">{{ typingUsersText }}</p>
                             <div class="formatting-toolbar" role="group" aria-label="Message formatting">
                                 <button type="button" @click="formatMessage('**')" :disabled="isBanned || !connected" title="Bold" aria-label="Bold"><strong>B</strong></button>
                                 <button type="button" @click="formatMessage('*')" :disabled="isBanned || !connected" title="Italic" aria-label="Italic"><em>I</em></button>
@@ -635,8 +634,7 @@ session_start();
                         <div v-for="user in group.users" :key="user.id" class="user" :class="'tier-' + group.tier">
                             <img v-if="user.avatar" class="mobile-user-avatar" :class="{'is-typing': isUserTyping(user.id)}" :src="user.avatar" alt="">
                             <span v-else :class="user.status" :style="isUserTyping(user.id) ? 'background:#ff9800' : ''" aria-hidden="true"></span>
-                            <button type="button" class="user-name user-address" @click="addressUser(user)" :disabled="isBanned || !connected" :title="'Address ' + memberLabel(user)">{{ memberLabel(user) }}</button>
-                            <small v-if="isUserTyping(user.id)" class="user-typing-label">typing…</small>
+                            <button type="button" class="user-name user-address" :class="{'is-typing': isUserTyping(user.id)}" @click="addressUser(user)" :disabled="isBanned || !connected" :title="'Address ' + memberLabel(user)">{{ memberLabel(user) }}</button>
                                     <small v-if="isRoomOwner(currentRoomObj, user)" class="room-owner-badge" title="Room owner" aria-label="Room owner">♛</small>
                         </div>
                     </div>

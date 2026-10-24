@@ -791,16 +791,6 @@ createApp({
 
         const typingByRoom = ref({});
         const userTyping = computed(() => typingByRoom.value[currentRoom.value] || []);
-        const typingUsersText = computed(() => {
-            const members = currentRoomObj.value?.memberList || [];
-            const names = userTyping.value.filter(id => String(id) !== String(userId.value)).map(id => {
-                const member = members.find(item => String(item.id) === String(id));
-                return member ? memberLabel(member) : "Someone";
-            });
-            if (!names.length) return "";
-            const label = names.length > 2 ? `${names.slice(0, 2).join(", ")} and ${names.length - 2} others` : names.join(" and ");
-            return `${label} ${names.length === 1 ? "is" : "are"} typing…`;
-        });
         const message = ref("");
         const messageBox = ref(null);
         const messageInput = ref(null);
@@ -3025,7 +3015,6 @@ createApp({
             message,
             sendTyping,
             isUserTyping,
-            typingUsersText,
             messageParts,
             messageLinkHref,
             CHAT_EMOJI,
