@@ -467,11 +467,10 @@ function youtubeItems(payload) {
     }).filter(Boolean).slice(0, 100);
 }
 
-function updateYoutubeQueue(state, items, replace = false) {
-    if (!items.length) return state;
-    if (replace) return { current: items[0], queue: items.slice(1) };
-    const queue = [...state.queue, ...items].slice(0, 100);
-    return state.current ? { ...state, queue } : { current: queue.shift(), queue };
+function youtubePlaybackPosition(state, now, clockOffset = null) {
+    const age = clockOffset === null ? Math.max(0, now - state.receivedAt) : Math.max(0, now - clockOffset - state.serverNow);
+    const position = Math.max(0, Number(state.position) || 0) + (state.playing ? age / 1000 : 0);
+    return state.current?.duration ? Math.min(position, state.current.duration) : position;
 }
 
 let youtubeApiPromise;
@@ -790,7 +789,18 @@ createApp({
             });
         }
 
-        const userTyping = ref([]);
+        const typingByRoom = ref({});
+        const userTyping = computed(() => typingByRoom.value[currentRoom.value] || []);
+        const typingUsersText = computed(() => {
+            const members = currentRoomObj.value?.memberList || [];
+            const names = userTyping.value.filter(id => String(id) !== String(userId.value)).map(id => {
+                const member = members.find(item => String(item.id) === String(id));
+                return member ? memberLabel(member) : "Someone";
+            });
+            if (!names.length) return "";
+            const label = names.length > 2 ? `${names.slice(0, 2).join(", ")} and ${names.length - 2} others` : names.join(" and ");
+            return `${label} ${names.length === 1 ? "is" : "are"} typing…`;
+        });
         const message = ref("");
         const messageBox = ref(null);
         const messageInput = ref(null);
@@ -1420,15 +1430,35 @@ createApp({
         */
 
         // YouTube playback and queues are separate from the existing watch party.
+        const canControlYoutube = computed(() => {
+            if (canManageRoom.value) return true;
+            const room = currentRoomObj.value;
+            const self = room?.memberList?.find(member => String(member.id) === String(userId.value)) || { id: userId.value, privilegeClass: room?.raw?.privilegeClass };
+            return roomPrivilegeClasses(room)[memberRoomClass(room, self)]?.permissions?.includes(CHAT_PERMISSIONS.CHANGE_SETTINGS) === true;
+        });
         const youtubeByRoom = ref({});
-        const youtubeState = computed(() => youtubeByRoom.value[currentRoom.value] || { current: null, queue: [] });
+        const youtubeClosedTokens = ref({});
+        const youtubeState = computed(() => {
+            const state = youtubeByRoom.value[currentRoom.value] || { current: null, queue: [] };
+            return state.current && youtubeClosedTokens.value[currentRoom.value] === state.current.token ? { current: null, queue: [] } : state;
+        });
         const youtubeDesktop = ref(null);
         const youtubeMobile = ref(null);
         const youtubeError = ref("");
+        const youtubeAutoplayBlocked = ref(false);
         let youtubePlayer = null;
         let youtubeGeneration = 0;
         let youtubeIdleTimer = null;
         let youtubePlaying = false;
+        let youtubeReady = false;
+        let youtubeLoadedToken = null;
+        let youtubeApplyingUntil = 0;
+        let youtubeSample = null;
+        let youtubeReportedDuration = null;
+        let youtubeClockOffset = null;
+        let youtubeBestRoundTrip = Infinity;
+        let youtubeSyncTimer = null;
+        let youtubeLastSync = 0;
         const YOUTUBE_IDLE_MS = 5 * 60 * 1000;
 
         function resetYoutubeIdle() {
@@ -1440,57 +1470,123 @@ createApp({
             }, YOUTUBE_IDLE_MS);
         }
 
+        function requestYoutubeSync(room = currentRoom.value) {
+            if (!room || !isSocketReady()) return;
+            youtubeLastSync = Date.now();
+            socket.emit("youtubeControl", { room, action: "sync", clientSentAt: Date.now() });
+        }
+
+        function youtubeControl(action, extra = {}) {
+            if (!isSocketReady() || !currentRoom.value) return false;
+            if (!canControlYoutube.value) {
+                youtubeError.value = "Room managers control the shared YouTube player.";
+                return false;
+            }
+            socket.emit("youtubeControl", { room: currentRoom.value, action, token: youtubeState.value.current?.token, ...extra });
+            return true;
+        }
+
         function playYoutube(data) { handleYoutubeCommand("playYoutube", data); }
         function AddQueue(data) { handleYoutubeCommand("AddQueue", data); }
 
         function testYoutube(argument = "") {
-            if (!currentRoom.value) return;
             const id = youtubeVideoId(argument || "M7lc1UVf-VE");
-            if (!id) {
-                youtubeError.value = "Use /testyoutube followed by a YouTube video ID or URL.";
-                return;
-            }
-            playYoutube({ room: currentRoom.value, data: { id, title: "YouTube player test" } });
-            AddQueue({ room: currentRoom.value, data: { id: "aqz-KE-bpKQ", title: "Queued video test" } });
+            if (!id) { youtubeError.value = "Use /testyoutube followed by a YouTube video ID or URL."; return; }
+            playYoutube({ data: { id, title: "YouTube player test" } });
+            AddQueue({ data: { id: "aqz-KE-bpKQ", title: "Queued video test" } });
         }
 
         function handleYoutubeCommand(command, payload) {
             const room = payload?.room ?? payload?.roomId ?? payload?.data?.room ?? payload?.data?.roomId ?? currentRoom.value;
-            if (!room || !rooms.value.some(item => item.name === room)) return;
+            if (room !== currentRoom.value || !rooms.value.some(item => item.name === room)) return;
             const items = youtubeItems(payload);
             if (!items.length) return;
-            const state = youtubeByRoom.value[room] || { current: null, queue: [] };
-            youtubeByRoom.value = { ...youtubeByRoom.value, [room]: updateYoutubeQueue(state, items, command.toLowerCase() === "playyoutube") };
-            if (room === currentRoom.value) resetYoutubeIdle();
+            youtubeControl(command.toLowerCase() === "playyoutube" ? "load" : "enqueue", { data: items });
         }
 
-        function nextYoutube(room = currentRoom.value) {
-            const state = youtubeByRoom.value[room];
-            if (!state) return;
-            const [current = null, ...queue] = state.queue;
-            youtubeByRoom.value = { ...youtubeByRoom.value, [room]: { current, queue } };
+        function applyYoutubeSnapshot(data) {
+            if (!data?.room || !rooms.value.some(room => room.name === data.room) || !Number.isFinite(data.revision)) return;
+            const previous = youtubeByRoom.value[data.room];
+            if (previous?.epoch === data.epoch && data.revision < previous.revision) return;
+            if (data.current && (!youtubeVideoId(data.current.id) || typeof data.current.token !== "string")) return;
+            if (!Number.isFinite(data.position) || !Number.isFinite(data.serverNow)) return;
+            const receivedAt = Date.now();
+            if (Number.isFinite(data.clientSentAt)) {
+                const roundTrip = receivedAt - data.clientSentAt;
+                if (roundTrip >= 0 && roundTrip < 15000 && roundTrip <= youtubeBestRoundTrip * 1.2) {
+                    youtubeBestRoundTrip = Math.min(youtubeBestRoundTrip, roundTrip);
+                    youtubeClockOffset = (receivedAt + data.clientSentAt) / 2 - data.serverNow;
+                }
+            }
+            youtubeByRoom.value = { ...youtubeByRoom.value, [data.room]: { ...data, current: data.current ? { ...data.current } : null, queue: youtubeItems(data.queue || []), receivedAt } };
+            if (data.room === currentRoom.value) nextTick(applyYoutubePlayback);
         }
+
+        function nextYoutube() { youtubeControl("next"); }
 
         function closeYoutube() {
-            const updated = { ...youtubeByRoom.value };
-            delete updated[currentRoom.value];
-            youtubeByRoom.value = updated;
+            const token = youtubeState.value.current?.token;
+            if (token) youtubeClosedTokens.value = { ...youtubeClosedTokens.value, [currentRoom.value]: token };
         }
 
         function destroyYoutubePlayer() {
             youtubeGeneration++;
             clearTimeout(youtubeIdleTimer);
-            youtubePlaying = false;
-            youtubePlayer?.destroy();
-            youtubePlayer = null;
+            youtubePlaying = false; youtubeReady = false; youtubeLoadedToken = null;
+            youtubeSample = null; youtubeReportedDuration = null;
+            youtubePlayer?.destroy(); youtubePlayer = null;
+        }
+
+        function applyYoutubePlayback() {
+            const state = youtubeState.value;
+            if (!youtubeReady || !state.current || youtubeLoadedToken !== state.current.token || !youtubePlayer) return;
+            const target = youtubePlaybackPosition(state, Date.now(), youtubeClockOffset);
+            const actual = Number(youtubePlayer.getCurrentTime());
+            const playing = youtubePlayer.getPlayerState() === 1;
+            if (Math.abs(actual - target) > 1.5) {
+                youtubeApplyingUntil = Date.now() + 1500;
+                youtubePlayer.seekTo(target, true);
+                youtubeSample = null;
+            }
+            if (Boolean(state.playing) !== playing && !youtubeAutoplayBlocked.value) {
+                youtubeApplyingUntil = Date.now() + 1500;
+                if (state.playing) youtubePlayer.playVideo();
+                else youtubePlayer.pauseVideo();
+            }
+        }
+
+        function resumeYoutube() {
+            youtubeAutoplayBlocked.value = false;
+            youtubeError.value = "";
+            youtubeApplyingUntil = Date.now() + 1500;
+            applyYoutubePlayback();
+        }
+
+        function sampleYoutubePlayback() {
+            const state = youtubeState.value;
+            if (!youtubeReady || !state.current || !youtubePlayer || youtubeLoadedToken !== state.current.token) return;
+            const position = Number(youtubePlayer.getCurrentTime());
+            const playing = youtubePlayer.getPlayerState() === 1;
+            const now = Date.now();
+            if (canControlYoutube.value) {
+                const duration = Number(youtubePlayer.getDuration());
+                if (Number.isFinite(duration) && duration > 0 && duration !== youtubeReportedDuration && duration !== state.current.duration) {
+                    youtubeReportedDuration = duration;
+                    youtubeControl("duration", { duration });
+                }
+                if (youtubeSample && now > youtubeApplyingUntil && !youtubeAutoplayBlocked.value) {
+                    const expected = youtubeSample.position + (youtubeSample.playing ? (now - youtubeSample.at) / 1000 : 0);
+                    if (Math.abs(position - expected) > 1.75) youtubeControl("seek", { position });
+                }
+            }
+            youtubeSample = { position, playing, at: now };
         }
 
         async function mountYoutubePlayer() {
             destroyYoutubePlayer();
             const generation = youtubeGeneration;
-            const room = currentRoom.value;
             const video = youtubeState.value.current;
-            youtubeError.value = "";
+            youtubeError.value = ""; youtubeAutoplayBlocked.value = false;
             if (!video) return;
             resetYoutubeIdle();
             await nextTick();
@@ -1499,37 +1595,45 @@ createApp({
                 if (generation !== youtubeGeneration) return;
                 const container = showMobileUsers.value ? youtubeMobile.value : youtubeDesktop.value;
                 if (!container) return;
-                // The API replaces its target; keep Vue's container intact.
-                const target = document.createElement("div");
-                container.replaceChildren(target);
+                const target = document.createElement("div"); container.replaceChildren(target);
+                youtubeLoadedToken = video.token;
                 youtubePlayer = new YT.Player(target, {
-                    videoId: video.id,
-                    width: "100%", height: "100%",
-                    playerVars: { autoplay: 1, playsinline: 1, origin: window.location.origin },
+                    videoId: video.id, width: "100%", height: "100%",
+                    playerVars: { autoplay: 0, controls: canControlYoutube.value ? 1 : 0, playsinline: 1, origin: window.location.origin },
                     events: {
+                        onReady(event) {
+                            if (generation !== youtubeGeneration) return;
+                            youtubePlayer = event.target; youtubeReady = true;
+                            applyYoutubePlayback(); sampleYoutubePlayback();
+                        },
                         onStateChange(event) {
                             if (generation !== youtubeGeneration) return;
                             youtubePlaying = event.data === YT.PlayerState.PLAYING || event.data === YT.PlayerState.BUFFERING;
                             resetYoutubeIdle();
-                            if (event.data === YT.PlayerState.ENDED && youtubeByRoom.value[room]?.queue.length) nextYoutube(room);
+                            if (!youtubeReady || Date.now() < youtubeApplyingUntil || youtubeAutoplayBlocked.value) return;
+                            if (event.data === YT.PlayerState.ENDED && canControlYoutube.value) youtubeControl("ended");
+                            else if (canControlYoutube.value && [YT.PlayerState.PLAYING, YT.PlayerState.PAUSED].includes(event.data)) {
+                                youtubeControl(event.data === YT.PlayerState.PLAYING ? "play" : "pause", { position: Number(youtubePlayer.getCurrentTime()) });
+                            }
                         },
                         onError() {
                             if (generation !== youtubeGeneration) return;
-                            youtubePlaying = false;
-                            resetYoutubeIdle();
-                            youtubeError.value = "This video cannot be played here. Skip to the next video.";
+                            youtubePlaying = false; resetYoutubeIdle();
+                            youtubeError.value = "This video cannot be played here. A room manager can skip it.";
                         },
                         onAutoplayBlocked() {
-                            if (generation === youtubeGeneration) youtubeError.value = "Press play in the video to start playback.";
+                            if (generation !== youtubeGeneration) return;
+                            youtubeAutoplayBlocked.value = true;
+                            youtubePlaying = false; resetYoutubeIdle();
+                            youtubeError.value = "Start playback to join the room's video.";
                         }
                     }
                 });
-            } catch (error) {
-                if (generation === youtubeGeneration) youtubeError.value = error.message;
-            }
+            } catch (error) { if (generation === youtubeGeneration) youtubeError.value = error.message; }
         }
 
-        watch([() => youtubeState.value.current, currentRoom, showMobileUsers], mountYoutubePlayer);
+        watch([() => youtubeState.value.current?.token, currentRoom, showMobileUsers], mountYoutubePlayer);
+        watch(currentRoom, () => requestYoutubeSync());
 
         const mediaByRoom = ref({}); // { [roomId]: { url, playing, time, loadedBy } }
         const partyMembership = ref({}); // { [roomId]: boolean } — local opt-in state
@@ -1829,7 +1933,7 @@ createApp({
             messagesByRoom.value = {};
             memberSnapshotVersions.clear();
             seenMessageIdsByRoom.clear();
-            userTyping.value = [];
+            typingByRoom.value = {};
             connected.value = false;
             connecting.value = false;
             connectionError.value = "";
@@ -1837,6 +1941,9 @@ createApp({
             reconnectRoomIds = new Set();
             reconnectTargetRoom = null;
             youtubeByRoom.value = {};
+            youtubeClosedTokens.value = {};
+            youtubeClockOffset = null;
+            youtubeBestRoundTrip = Infinity;
             mediaByRoom.value = {};
             partyMembership.value = {};
             showPermissionsPanel.value = false;
@@ -1926,7 +2033,7 @@ createApp({
                 connected.value = false;
                 connectionError.value = reason ?? connectionError.value ?? "Disconnected";
                 connecting.value = reason !== "io client disconnect";
-                userTyping.value = [];
+                typingByRoom.value = {};
                 clearTimeout(typingTimeout);
 
                 reconnectTargetRoom = currentRoom.value;
@@ -2258,6 +2365,7 @@ createApp({
                 } else {
                     currentRoom.value = roomId;
                 }
+                requestYoutubeSync(roomId);
             });
 
             /*
@@ -2267,13 +2375,15 @@ createApp({
             */
 
             socket.on("userTyping", data => {
-                if (!userTyping.value.includes(data.userId)) {
-                    userTyping.value.push(data.userId);
-                }
+                if (!data?.room || data.userId == null || !rooms.value.some(room => room.name === data.room)) return;
+                const id = String(data.userId);
+                const users = typingByRoom.value[data.room] || [];
+                if (!users.includes(id)) typingByRoom.value = { ...typingByRoom.value, [data.room]: [...users, id] };
             });
 
             socket.on("userStopTyping", data => {
-                userTyping.value = userTyping.value.filter(u => u !== data.userId);
+                if (!data?.room || data.userId == null) return;
+                typingByRoom.value = { ...typingByRoom.value, [data.room]: (typingByRoom.value[data.room] || []).filter(id => id !== String(data.userId)) };
             });
 
             /*
@@ -2472,6 +2582,10 @@ createApp({
 
             // Named events: { room?, data: ID|URL|{id|videoId|url,title?}|[...] }.
             // Command envelopes use the same shape plus command: playYoutube/AddQueue.
+            socket.on("youtubeState", applyYoutubeSnapshot);
+            socket.on("youtubeError", data => {
+                if (data?.room === currentRoom.value) youtubeError.value = String(data.message || "YouTube synchronization failed.");
+            });
             socket.on("playYoutube", playYoutube);
             socket.on("AddQueue", AddQueue);
             socket.on("addQueue", AddQueue);
@@ -2507,7 +2621,7 @@ createApp({
             connected.value = false;
             connecting.value = false;
             connectionError.value = "You're offline. Reconnect when your network returns.";
-            userTyping.value = [];
+            typingByRoom.value = {};
             clearTimeout(typingTimeout);
         }
 
@@ -2578,7 +2692,9 @@ createApp({
             }
 
             delete youtubeByRoom.value[roomName];
+            delete youtubeClosedTokens.value[roomName];
             delete messagesByRoom.value[roomName];
+            delete typingByRoom.value[roomName];
             clearRoomActivity(roomName);
             rooms.value = rooms.value.filter(r => r.name !== roomName);
 
@@ -2617,7 +2733,7 @@ createApp({
         }
 
         function isUserTyping(id) {
-            return userTyping.value.includes(id);
+            return userTyping.value.includes(String(id));
         }
 
         /*
@@ -2720,10 +2836,11 @@ createApp({
         function sendTyping() {
             if (!isSocketReady() || !currentRoom.value || isBanned.value) return;
 
+            const typingRoom = currentRoom.value;
             socket.emit("runCommand", {
                 command: "typing",
                 data: {
-                    recipientId: currentRoom.value,
+                    recipientId: typingRoom,
                     userId: userId.value
                 }
             });
@@ -2732,12 +2849,12 @@ createApp({
             // indicator doesn't get stuck on for other users.
             clearTimeout(typingTimeout);
             typingTimeout = setTimeout(() => {
-                if (!isSocketReady() || !currentRoom.value) return;
+                if (!isSocketReady()) return;
 
                 socket.emit("runCommand", {
                     command: "stopTyping",
                     data: {
-                        recipientId: currentRoom.value,
+                        recipientId: typingRoom,
                         userId: userId.value
                     }
                 });
@@ -2759,6 +2876,10 @@ createApp({
         */
 
         onMounted(() => {
+            youtubeSyncTimer = setInterval(() => {
+                sampleYoutubePlayback();
+                if (Date.now() - youtubeLastSync >= 3000) requestYoutubeSync();
+            }, 500);
             document.addEventListener("pointerdown", unlockNotificationAudio);
             document.addEventListener("keydown", unlockNotificationAudio);
             document.addEventListener("visibilitychange", handlePageResume);
@@ -2812,6 +2933,7 @@ createApp({
         });
 
         onBeforeUnmount(() => {
+            clearInterval(youtubeSyncTimer);
             destroyYoutubePlayer();
             document.removeEventListener("pointerdown", unlockNotificationAudio);
             document.removeEventListener("keydown", unlockNotificationAudio);
@@ -2903,6 +3025,7 @@ createApp({
             message,
             sendTyping,
             isUserTyping,
+            typingUsersText,
             messageParts,
             messageLinkHref,
             CHAT_EMOJI,
@@ -2951,6 +3074,9 @@ createApp({
             AddQueue,
             resetYoutubeIdle,
             youtubeState,
+            canControlYoutube,
+            youtubeAutoplayBlocked,
+            resumeYoutube,
             youtubeDesktop,
             youtubeMobile,
             youtubeError,

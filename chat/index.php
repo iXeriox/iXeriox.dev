@@ -522,10 +522,12 @@ session_start();
                                 <div class="youtube-video" ref="youtubeDesktop"></div>
                                 <p class="youtube-title">{{ youtubeState.current.title }}</p>
                                 <p v-if="youtubeError" class="youtube-error" role="status">{{ youtubeError }} <button type="button" @click="mountYoutubePlayer">Retry</button></p>
-                                <small>Closes after 5 minutes idle</small>
+                                <small>Synced with room · {{ canControlYoutube ? 'You control playback' : 'Manager controls playback' }}</small>
+                                <button v-if="youtubeAutoplayBlocked" type="button" @click="resumeYoutube">Start playback</button>
+                                <small>Closes locally after 5 minutes idle</small>
                                 <div class="youtube-queue-heading">
                                     <span>Up next · {{ youtubeState.queue.length }}</span>
-                                    <button type="button" @click="nextYoutube()" :disabled="!youtubeState.queue.length">Next</button>
+                                    <button type="button" @click="nextYoutube()" :disabled="!youtubeState.queue.length || !canControlYoutube">Next</button>
                                 </div>
                                 <ol v-if="youtubeState.queue.length" class="youtube-queue">
                                     <li v-for="(video, index) in youtubeState.queue" :key="index">{{ video.title }}</li>
@@ -560,6 +562,7 @@ session_start();
                         </button>
 
                         <div class="message-composer">
+                            <p v-if="typingUsersText" class="chat-typing-status" role="status" aria-live="polite">{{ typingUsersText }}</p>
                             <div class="formatting-toolbar" role="group" aria-label="Message formatting">
                                 <button type="button" @click="formatMessage('**')" :disabled="isBanned || !connected" title="Bold" aria-label="Bold"><strong>B</strong></button>
                                 <button type="button" @click="formatMessage('*')" :disabled="isBanned || !connected" title="Italic" aria-label="Italic"><em>I</em></button>
@@ -570,6 +573,7 @@ session_start();
                             <div v-if="showEmojiPicker" id="chat-emoji-picker" class="chat-emoji-picker" role="group" aria-label="Emoji choices" @keydown.esc.prevent.stop="showEmojiPicker = false">
                                 <button v-for="[name, emoji] in CHAT_EMOJI" :key="name" type="button" @click="insertEmoji(emoji)" :title="':' + name + ':'" :aria-label="name.replaceAll('_', ' ')" :disabled="isBanned || !connected">{{ emoji }}</button>
                             </div>
+                            <p v-if="youtubeError && !youtubeState.current" class="youtube-error" role="status">{{ youtubeError }}</p>
                             <div class="message-entry">
                                 <textarea v-if="multiline"
                                     ref="messageInput"
@@ -629,9 +633,10 @@ session_start();
                             <span class="user-group-count">{{ group.users.length }}</span>
                         </div>
                         <div v-for="user in group.users" :key="user.id" class="user" :class="'tier-' + group.tier">
-                            <img v-if="user.avatar" class="mobile-user-avatar" :src="user.avatar" alt="">
-                            <span v-else :class="user.status" aria-hidden="true"></span>
+                            <img v-if="user.avatar" class="mobile-user-avatar" :class="{'is-typing': isUserTyping(user.id)}" :src="user.avatar" alt="">
+                            <span v-else :class="user.status" :style="isUserTyping(user.id) ? 'background:#ff9800' : ''" aria-hidden="true"></span>
                             <button type="button" class="user-name user-address" @click="addressUser(user)" :disabled="isBanned || !connected" :title="'Address ' + memberLabel(user)">{{ memberLabel(user) }}</button>
+                            <small v-if="isUserTyping(user.id)" class="user-typing-label">typing…</small>
                                     <small v-if="isRoomOwner(currentRoomObj, user)" class="room-owner-badge" title="Room owner" aria-label="Room owner">♛</small>
                         </div>
                     </div>
@@ -646,10 +651,12 @@ session_start();
                                 <div class="youtube-video" ref="youtubeMobile"></div>
                                 <p class="youtube-title">{{ youtubeState.current.title }}</p>
                                 <p v-if="youtubeError" class="youtube-error" role="status">{{ youtubeError }} <button type="button" @click="mountYoutubePlayer">Retry</button></p>
-                                <small>Closes after 5 minutes idle</small>
+                                <small>Synced with room · {{ canControlYoutube ? 'You control playback' : 'Manager controls playback' }}</small>
+                                <button v-if="youtubeAutoplayBlocked" type="button" @click="resumeYoutube">Start playback</button>
+                                <small>Closes locally after 5 minutes idle</small>
                                 <div class="youtube-queue-heading">
                                     <span>Up next · {{ youtubeState.queue.length }}</span>
-                                    <button type="button" @click="nextYoutube()" :disabled="!youtubeState.queue.length">Next</button>
+                                    <button type="button" @click="nextYoutube()" :disabled="!youtubeState.queue.length || !canControlYoutube">Next</button>
                                 </div>
                                 <ol v-if="youtubeState.queue.length" class="youtube-queue">
                                     <li v-for="(video, index) in youtubeState.queue" :key="index">{{ video.title }}</li>
