@@ -1041,9 +1041,7 @@ header {
 }
 
 
-.user span[class*="online"],
-.user span[class*="offline"],
-.user span:not(.class-badge):not(.user-name):not(.user-avatar) {
+.user .user-status-dot {
 
 
     width:8px;
@@ -1079,7 +1077,7 @@ header {
 .user .online {
 
 
-    background:var(--green) !important;
+    background:var(--green);
 
 
     box-shadow:
@@ -3832,6 +3830,8 @@ button.msg-user { font-weight:700; }
 .chat-emoji-picker button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 
 
-.chat-typing-status { margin:0 0 8px; font-size:12px; line-height:1.4; color:var(--accent); overflow-wrap:anywhere; }
 .mobile-user-avatar.is-typing { outline:2px solid #ff9800; outline-offset:2px; }
-.user-typing-label { flex-shrink:0; font-size:10px; color:#ffb74d; }
+
+.user-address.is-typing { color:#ff9800; }
+
+.user .user-status-dot.is-typing { background:#ff9800; box-shadow:0 0 10px #ff9800; }
