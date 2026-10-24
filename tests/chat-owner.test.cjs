@@ -47,3 +47,19 @@ test('owner can change own class, moderators cannot assign owner class', () => {
     state.canAssignRoomClasses.value=false;
     assert.equal(state.canManageUser(owner),false);
 });
+
+test('required orders -1 and 0 are protected independent of class name', () => {
+    for (const order of [-1,0,'-1','0']) assert(context.isRequiredPrivilegeClass({order}));
+    for (const order of [-2,1,10,99,undefined,null,'']) assert(!context.isRequiredPrivilegeClass({order}));
+    assert(!context.isRequiredPrivilegeClass(undefined));
+});
+
+test('delete handler blocks required classes before confirmation or server commands', () => {
+    let confirmed=0,sent=0;
+    const state=vm.createContext({currentRoomObj:{value:{raw:{privilegeClasses:{Guests:{order:0},Banned:{order:-1},Members:{order:10}}}}},roomPrivilegeClasses:context.roomPrivilegeClasses,isRequiredPrivilegeClass:context.isRequiredPrivilegeClass,adminError:{value:''},window:{confirm(){confirmed++;return true}},sendAdminCommand(){sent++}});
+    const start=source.indexOf('        function deletePrivilegeClass(');
+    vm.runInContext(source.slice(start,source.indexOf('        function setPrivilegeClassOrder(',start)),state);
+    state.deletePrivilegeClass('Guests');state.deletePrivilegeClass('Banned');
+    assert.equal(confirmed,0);assert.equal(sent,0);assert.match(state.adminError.value,/required/);
+    state.deletePrivilegeClass('Members');assert.equal(confirmed,1);assert.equal(sent,1);
+});
