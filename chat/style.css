@@ -1041,9 +1041,7 @@ header {
 }
 
 
-.user span[class*="online"],
-.user span[class*="offline"],
-.user span:not(.class-badge):not(.user-name):not(.user-avatar) {
+.user .user-status-dot {
 
 
     width:8px;
@@ -1079,7 +1077,7 @@ header {
 .user .online {
 
 
-    background:var(--green) !important;
+    background:var(--green);
 
 
     box-shadow:
@@ -3835,3 +3833,5 @@ button.msg-user { font-weight:700; }
 .mobile-user-avatar.is-typing { outline:2px solid #ff9800; outline-offset:2px; }
 
 .user-address.is-typing { color:#ff9800; }
+
+.user .user-status-dot.is-typing { background:#ff9800; box-shadow:0 0 10px #ff9800; }

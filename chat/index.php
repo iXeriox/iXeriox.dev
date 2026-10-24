@@ -482,8 +482,8 @@ session_start();
 
                                     <span
                                         v-if="!user.avatar"
-                                        :class="user.status"
-                                        :style="isUserTyping(user.id) ? 'background:#ff9800' : ''"
+                                        class="user-status-dot"
+                                        :class="[user.status, {'is-typing': isUserTyping(user.id)}]"
                                     ></span>
                                     <span
                                         v-else
@@ -633,7 +633,7 @@ session_start();
                         </div>
                         <div v-for="user in group.users" :key="user.id" class="user" :class="'tier-' + group.tier">
                             <img v-if="user.avatar" class="mobile-user-avatar" :class="{'is-typing': isUserTyping(user.id)}" :src="user.avatar" alt="">
-                            <span v-else :class="user.status" :style="isUserTyping(user.id) ? 'background:#ff9800' : ''" aria-hidden="true"></span>
+                            <span v-else class="user-status-dot" :class="[user.status, {'is-typing': isUserTyping(user.id)}]" aria-hidden="true"></span>
                             <button type="button" class="user-name user-address" :class="{'is-typing': isUserTyping(user.id)}" @click="addressUser(user)" :disabled="isBanned || !connected" :title="'Address ' + memberLabel(user)">{{ memberLabel(user) }}</button>
                                     <small v-if="isRoomOwner(currentRoomObj, user)" class="room-owner-badge" title="Room owner" aria-label="Room owner">♛</small>
                         </div>
