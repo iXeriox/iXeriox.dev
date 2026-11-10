@@ -234,7 +234,7 @@ input[type="file"]::file-selector-button{font:inherit;color:var(--cyan);backgrou
 <label for="access">Access password</label><input id="access" type="password" autocomplete="off" placeholder="Private room access">
 <label for="phrase">Encryption phrase (never sent to the server)</label><input id="phrase" type="password" autocomplete="off" placeholder="Shared secret with the other participant">
 <p><small>Everyone in this room must use the same encryption phrase to read messages. Choose a separate, strong phrase from your access password.</small></p>
-<button class="primary" id="unlock">Unlock private room →</button>
+<button class="primary" id="unlock" disabled>Unlock private room →</button>
 </div>
 <div id="chat" class="hidden">
 <div class="row" style="justify-content:space-between"><div class="tag">● ENCRYPTION ACTIVE · READ ONCE</div><button class="danger" id="logout">Lock room</button></div>
@@ -303,6 +303,7 @@ async function lock(){
   $('access').value='';$('phrase').value='';status('Room locked.');
 }
 async function unlock(){
+  const unlockButton=$('unlock');unlockButton.disabled=true;
   try{
     if(!$('access').value||!$('phrase').value)throw Error('Enter both passwords.');
     if(!window.isSecureContext || !crypto.subtle)throw Error('HTTPS and Web Crypto are required.');
@@ -314,7 +315,7 @@ async function unlock(){
     status('Room unlocked. Keep the encryption phrase private.');
     await list();
     polling=setInterval(()=>{list().catch(e=>status(e.message));},3500);
-  }catch(e){status(e.message);}
+  }catch(e){status(e.message);}finally{unlockButton.disabled=false;}
 }
 async function list(){
   if(!key)return;
@@ -403,7 +404,7 @@ $('record').addEventListener('click',async()=>{
   }catch(e){status(e.message);}
 });
 window.addEventListener('pagehide',clearPreview);
-api('status').then(r=>{csrf=r.csrf;if(r.ok)status('Session active. Re-enter access password and encryption phrase to unlock.');})
+api('status').then(r=>{csrf=r.csrf;$('unlock').disabled=false;if(r.ok)status('Session active. Re-enter access password and encryption phrase to unlock.');})
 .catch(()=>status('Server requires configuration or is unavailable.'));
 })();
 </script>
