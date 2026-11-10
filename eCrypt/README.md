@@ -26,7 +26,7 @@ A standalone PHP/SQLite encrypted inbox at `/eCrypt/`, visually matched to the i
 ## Behaviour
 
 - AES-256-GCM encryption in the browser, with a key derived using PBKDF2-SHA256 (310k iterations).
-- Text, audio, images, videos and voice notes. Attachments up to 8 MiB (encrypted JSON/base64 overhead applies).
+- Text, audio, images, videos and voice notes. Mobile-friendly touch controls, 16px inputs to avoid iOS zoom, and separate photo/video/audio pickers. Attachments up to 6 MiB (limited for encrypted JSON/base64 overhead and mobile reliability).
 - Messages are only visible to other browser sessions. Refresh the recipient inbox to see messages (auto refresh every 3.5 seconds).
 - One-time retrieval is enforced with a SQLite write transaction: the first successful open request deletes the ciphertext before responding.
 - Undelivered messages expire after 24 hours **when the API is next used**. They are not immediately removed at the exact expiration time.
