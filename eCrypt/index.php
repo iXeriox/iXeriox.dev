@@ -163,7 +163,8 @@ if ($action !== '') {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07090d">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title>eCrypt // iXeriox.dev</title>
 <style>
@@ -188,7 +189,39 @@ button:hover:not(:disabled){background:#36e0d019}button:disabled{opacity:.4;curs
 .preview{background:var(--bg);border:1px solid var(--border);padding:15px;border-radius:10px;overflow-wrap:anywhere}
 .preview img,.preview video{max-width:100%;max-height:60vh;border-radius:8px}.preview audio{width:100%}
 #opened{margin-top:18px}#status{min-height:25px;color:var(--amber);font:13px var(--mono);margin-top:12px}
-@media(max-width:600px){.card{padding:16px}header{align-items:flex-start}.message{align-items:flex-start;flex-direction:column}}
+
+/* Touch-friendly mobile layout, preserving the main site's palette */
+html{-webkit-text-size-adjust:100%}body{overscroll-behavior-y:contain}
+button,input,textarea{touch-action:manipulation}
+button{min-height:44px;min-width:44px}
+button:focus-visible,a:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+input,textarea{font-size:16px;min-height:46px}
+input[type="file"]{min-height:54px;padding:12px}
+input[type="file"]::file-selector-button{font:inherit;color:var(--cyan);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-right:10px}
+#status{position:sticky;bottom:env(safe-area-inset-bottom,0px);z-index:5;background:var(--panel);border-radius:8px;padding:8px 0}
+#chat h2{margin:24px 0 12px}
+.compose-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.compose-actions button{width:100%;white-space:normal}
+.media-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+.media-actions button{padding:10px 6px;white-space:normal}
+#unlock{margin-top:10px}
+#record.recording{border-color:var(--amber);color:var(--amber);background:#ffad5515;animation:recordGlow 1.2s ease-in-out infinite alternate}
+@keyframes recordGlow{to{box-shadow:0 0 14px #ffad5550}}
+@media(max-width:600px){
+ main{padding:14px 12px calc(24px + env(safe-area-inset-bottom,0px))}
+ .card{padding:18px 14px;margin-top:16px}header{align-items:center;gap:10px}
+ header .logo{font-size:16px}header a{font-size:13px;padding:10px 0}
+ h1{font-size:29px}.message{align-items:stretch;flex-direction:column}
+ .message button{width:100%}
+ #unlock,#logout,#closePreview,#sendFile{width:100%}
+ #recordState{width:100%;text-align:center}
+ .inbox{max-height:min(40dvh,350px)}
+ .preview{padding:10px}.preview img,.preview video{max-height:55dvh}
+ .note{font-size:12px}
+}
+@media(max-width:380px){.media-actions{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){#record.recording{animation:none}}
+
 </style>
 </head>
 <body>
@@ -215,8 +248,11 @@ button:hover:not(:disabled){background:#36e0d019}button:disabled{opacity:.4;curs
 </div>
 <h2>./ compose</h2>
 <label for="message">One-time message</label><textarea id="message" placeholder="Your message…"></textarea>
-<div class="row"><button class="primary" id="sendText">Encrypt &amp; send text</button><button id="record">● Record voice</button></div>
-<label for="attachment">Or attach image, video or audio (maximum 8 MB)</label><input id="attachment" type="file" accept="image/*,video/*,audio/*">
+<div class="compose-actions"><button class="primary" id="sendText">Send text ↗</button><button id="record" aria-pressed="false">● Record voice</button></div>
+<label for="attachment">Share a photo, video or audio file (maximum 6 MB)</label>
+<div class="media-actions"><button type="button" id="pickImage">▧ Photos</button><button type="button" id="pickVideo">▶ Video</button><button type="button" id="pickAudio">♫ Audio</button></div>
+<input id="attachment" type="file" accept="image/*,video/*,audio/*" aria-label="Selected media file">
+<small id="selectedFile" aria-live="polite">No attachment selected</small>
 <div class="row" style="margin-top:12px"><button id="sendFile">Encrypt &amp; send attachment</button><small id="recordState"></small></div>
 </div>
 <div class="note">Read-once means the first successful server retrieval permanently consumes the message, even if decryption or playback fails. Messages not opened expire after 24 hours. This cannot prevent screenshots, recordings, browser caches, server backups, or copies made before deletion. This is a shared inbox, not individual direct messages.</div>
@@ -297,21 +333,19 @@ async function openMessage(id,button){
   button.disabled=true;clearPreview();
   try{
     const data=await api('open',{id});
-    await list();
     const bytes=await decrypt(data);
     const out=$('preview');out.replaceChildren();
     if(data.kind==='text'){const p=document.createElement('p');p.style.whiteSpace='pre-wrap';p.textContent=dec.decode(bytes);out.append(p);}
     else {
-      const blob=new Blob([bytes]);
       const wrapper=JSON.parse(dec.decode(bytes));
-      if(!wrapper || !['image','video','audio'].includes(wrapper.kind) || !['image/','video/','audio/'].some(t=>wrapper.mime.startsWith(t)))throw Error('Invalid attachment format');
+      if(!wrapper || !['image','video','audio'].includes(wrapper.kind) || typeof wrapper.mime!=='string' || !wrapper.mime.startsWith(wrapper.kind+'/'))throw Error('Invalid attachment format');
       const binary=unb64(wrapper.body);
       if(binary.byteLength>8*1024*1024)throw Error('Attachment too large');
       const mediaBlob=new Blob([binary],{type:wrapper.mime});currentUrl=URL.createObjectURL(mediaBlob);
       const el=document.createElement(wrapper.kind==='image'?'img':wrapper.kind==='video'?'video':'audio');
       el.src=currentUrl;if(el.tagName!=='IMG'){el.controls=true;el.playsInline=true;}el.alt='One-time attachment';out.append(el);
     }
-    $('opened').classList.remove('hidden');status('Message consumed and deleted from server.');
+    $('opened').classList.remove('hidden');$('opened').scrollIntoView({behavior:'smooth',block:'start'});status('Message consumed and deleted from server.');list().catch(()=>{});
   }catch(e){status('Message consumed/unavailable: '+e.message);await list().catch(()=>{});}
 }
 async function send(kind,bytes){
@@ -330,7 +364,7 @@ $('sendText').addEventListener('click',async()=>{
   }catch(e){status(e.message);}finally{btn.disabled=false;}
 });
 async function sendAttachment(file){
-  if(!file || file.size>8*1024*1024 || !file.size)throw Error('Choose a file under 8 MB.');
+  if(!file || file.size>6*1024*1024 || !file.size)throw Error('Choose a file under 6 MB.');
   const kind=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
   if(!kind)throw Error('Only image, video and audio attachments are supported.');
   const bytes=new Uint8Array(await file.arrayBuffer());
@@ -339,12 +373,19 @@ async function sendAttachment(file){
 }
 $('sendFile').addEventListener('click',async()=>{
   const btn=$('sendFile');btn.disabled=true;
-  try{await sendAttachment($('attachment').files[0]);$('attachment').value='';}
+  try{await sendAttachment($('attachment').files[0]);$('attachment').value='';$('selectedFile').textContent='No attachment selected';}
   catch(e){status(e.message);}finally{btn.disabled=false;}
+});
+function chooseFile(accept){const input=$('attachment');input.value='';input.accept=accept;input.click();}
+$('pickImage').addEventListener('click',()=>chooseFile('image/*'));
+$('pickVideo').addEventListener('click',()=>chooseFile('video/*'));
+$('pickAudio').addEventListener('click',()=>chooseFile('audio/*'));
+$('attachment').addEventListener('change',()=>{
+ const file=$('attachment').files[0];$('selectedFile').textContent=file?file.name+' · '+(file.size/1048576).toFixed(1)+' MB':'No attachment selected';
 });
 $('record').addEventListener('click',async()=>{
   try{
-    if(recorder?.state==='recording'){recorder.stop();$('record').textContent='● Record voice';return;}
+    if(recorder?.state==='recording'){recorder.stop();$('record').textContent='● Record voice';$('record').classList.remove('recording');$('record').setAttribute('aria-pressed','false');return;}
     if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)throw Error('Voice recording unsupported in this browser.');
     const stream=await navigator.mediaDevices.getUserMedia({audio:true});
     const mime=['audio/webm;codecs=opus','audio/mp4','audio/webm'].find(x=>MediaRecorder.isTypeSupported(x));
@@ -356,9 +397,9 @@ $('record').addEventListener('click',async()=>{
         await sendAttachment(new File([blob],'voice-note',{type:blob.type}));}
       catch(e){status(e.message);}
     };
-    recorder.start();$('record').textContent='■ Stop & send';
+    recorder.start();$('record').textContent='■ Stop & send';$('record').classList.add('recording');$('record').setAttribute('aria-pressed','true');
     $('recordState').textContent='Recording… maximum 60 seconds';
-    setTimeout(()=>{if(recorder?.state==='recording'){$('record').click();}},60000);
+    const activeRecorder=recorder;setTimeout(()=>{if(activeRecorder.state==='recording'){activeRecorder.stop();$('record').textContent='● Record voice';$('record').classList.remove('recording');$('record').setAttribute('aria-pressed','false');}},60000);
   }catch(e){status(e.message);}
 });
 window.addEventListener('pagehide',clearPreview);
