@@ -82,6 +82,19 @@ function store(): PDO {
         created INTEGER NOT NULL, expires INTEGER NOT NULL
     )');
     $db->exec('CREATE INDEX IF NOT EXISTS messages_expires ON messages(expires)');
+    $db->exec('CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        password_hash TEXT NOT NULL, public_key TEXT NOT NULL,
+        encrypted_private_key TEXT NOT NULL, private_iv TEXT NOT NULL,
+        private_salt TEXT NOT NULL, created INTEGER NOT NULL
+    )');
+    $db->exec('CREATE TABLE IF NOT EXISTS private_messages (
+        id TEXT PRIMARY KEY, sender TEXT NOT NULL, recipient_id TEXT NOT NULL,
+        kind TEXT NOT NULL, ciphertext TEXT NOT NULL, iv TEXT NOT NULL,
+        wrapped_key TEXT NOT NULL, created INTEGER NOT NULL, expires INTEGER NOT NULL
+    )');
+    $db->exec('CREATE INDEX IF NOT EXISTS private_messages_inbox ON private_messages(recipient_id, created)');
+    $db->prepare('DELETE FROM private_messages WHERE expires <= ?')->execute([time()]);
     $db->prepare('DELETE FROM messages WHERE expires <= ?')->execute([time()]);
     return $db;
 }
@@ -111,73 +124,149 @@ if ($action !== '') {
         !hash_equals((string)$_SESSION['csrf'], (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''))) {
         respond(403, ['error' => 'Invalid session token']);
     }
+    if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (!limitedAttempts()) respond(429, ['error' => 'Too many attempts. Try again later.']);
+        $username = trim((string)($data['username'] ?? ''));
+        $password = (string)($data['password'] ?? '');
+        $invite = (string)($data['invite'] ?? '');
+        $public = (string)($data['publicKey'] ?? '');
+        $private = (string)($data['encryptedPrivateKey'] ?? '');
+        $iv = (string)($data['privateIv'] ?? '');
+        $salt = (string)($data['privateSalt'] ?? '');
+        if (!preg_match('/^[A-Za-z0-9_.-]{3,32}$/D', $username)
+            || strlen($password) < 12 || strlen($password) > 256
+            || strlen($public) < 300 || strlen($public) > 1500
+            || strlen($private) < 600 || strlen($private) > 6000
+            || !preg_match('/^[A-Za-z0-9+\/]+={0,2}$/D', $public)
+            || !preg_match('/^[A-Za-z0-9+\/]+={0,2}$/D', $private)
+            || !preg_match('/^[A-Za-z0-9+\/]{16}$/D', $iv)
+            || strlen(base64_decode($salt, true) ?: '') !== 16) {
+            respond(422, ['error' => 'Invalid registration. Username: 3–32 letters/numbers; password: at least 12 characters.']);
+        }
+        if (!password_verify($invite, (string)settings()['password_hash'])) {
+            $_SESSION['attempts'][] = time();
+            respond(403, ['error' => 'Invalid registration invite']);
+        }
+        try {
+            $db = store();
+            $stmt = $db->prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt->execute([bin2hex(random_bytes(16)), $username, password_hash($password, PASSWORD_DEFAULT), $public, $private, $iv, $salt, time()]);
+            respond(200, ['ok' => true]);
+        } catch (PDOException $e) {
+            if ($e->getCode() === '23000' || str_contains($e->getMessage(), 'UNIQUE constraint')) respond(409, ['error' => 'Username already taken']);
+            error_log('eCrypt registration error: ' . $e->getMessage());
+            respond(503, ['error' => 'Registration temporarily unavailable']);
+        } catch (Throwable $e) {
+            error_log('eCrypt registration error: ' . $e->getMessage());
+            respond(503, ['error' => 'Registration temporarily unavailable']);
+        }
+    }
     if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!limitedAttempts()) respond(429, ['error' => 'Too many attempts. Try again later.']);
+        $username = trim((string)($data['username'] ?? ''));
         $password = (string)($data['password'] ?? '');
-        $hash = (string)settings()['password_hash'];
-        if (strlen($password) > 256 || !password_verify($password, $hash)) {
-            $_SESSION['attempts'][] = time();
-            respond(401, ['error' => 'Incorrect access password']);
+        if (strlen($username) > 32 || strlen($password) > 256) respond(401, ['error' => 'Invalid login']);
+        try {
+            $db = store();
+            $stmt = $db->prepare('SELECT * FROM users WHERE username = ? LIMIT 1');
+            $stmt->execute([$username]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$user || !password_verify($password, $user['password_hash'])) {
+                $_SESSION['attempts'][] = time();
+                respond(401, ['error' => 'Invalid username or access password']);
+            }
+            session_regenerate_id(true);
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['username'] = $user['username'];
+            $_SESSION['attempts'] = [];
+            $_SESSION['csrf'] = bin2hex(random_bytes(24));
+            respond(200, ['ok' => true, 'csrf' => $_SESSION['csrf'], 'username' => $user['username'],
+                'encryptedPrivateKey' => $user['encrypted_private_key'],
+                'privateIv' => $user['private_iv'], 'privateSalt' => $user['private_salt']]);
+        } catch (Throwable $e) {
+            error_log('eCrypt login error: ' . $e->getMessage());
+            respond(503, ['error' => 'Login temporarily unavailable']);
         }
-        session_regenerate_id(true);
-        $_SESSION['allowed'] = true;
-        $_SESSION['attempts'] = [];
-        $_SESSION['csrf'] = bin2hex(random_bytes(24));
-        respond(200, ['ok' => true, 'csrf' => $_SESSION['csrf'], 'salt' => getenv('ECRYPT_KDF_SALT')]);
     }
     if ($action === 'status' && $_SERVER['REQUEST_METHOD'] === 'GET') {
-        respond(200, ['ok' => !empty($_SESSION['allowed']), 'csrf' => $_SESSION['csrf'],
-            'salt' => !empty($_SESSION['allowed']) ? settings()['salt'] : null]);
+        respond(200, ['ok' => !empty($_SESSION['user_id']), 'csrf' => $_SESSION['csrf'],
+            'username' => $_SESSION['username'] ?? null]);
     }
     if ($action === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION = [];
         session_destroy();
         respond(200, ['ok' => true]);
     }
-    if (empty($_SESSION['allowed'])) respond(401, ['error' => 'Unlock eCrypt first']);
+    if (empty($_SESSION['user_id'])) respond(401, ['error' => 'Sign in first']);
     try {
+        $db = store();
+        $uid = (string)$_SESSION['user_id'];
+        if ($action === 'users' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+            $stmt = $db->prepare('SELECT username FROM users WHERE id != ? ORDER BY username LIMIT 500');
+            $stmt->execute([$uid]);
+            respond(200, ['users' => $stmt->fetchAll(PDO::FETCH_COLUMN)]);
+        }
         if ($action === 'list' && $_SERVER['REQUEST_METHOD'] === 'GET') {
-            $db = store();
-            $stmt = $db->prepare('SELECT id, sender, kind, created FROM messages WHERE sender_session != ? ORDER BY created ASC LIMIT 60');
-            $stmt->execute([session_id()]);
+            $stmt = $db->prepare('SELECT id, sender, kind, created FROM private_messages
+                WHERE recipient_id = ? AND expires > ? ORDER BY created ASC LIMIT 60');
+            $stmt->execute([$uid, time()]);
             respond(200, ['messages' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         }
+        if ($action === 'recipient' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+            $username = trim((string)($_GET['username'] ?? ''));
+            $stmt = $db->prepare('SELECT username, public_key FROM users WHERE username = ? AND id != ? LIMIT 1');
+            $stmt->execute([$username, $uid]);
+            $u = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$u) respond(404, ['error' => 'Recipient not found']);
+            respond(200, ['username' => $u['username'], 'publicKey' => $u['public_key']]);
+        }
         if ($action === 'send' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $name = trim((string)($data['sender'] ?? ''));
+            $recipient = trim((string)($data['recipient'] ?? ''));
             $kind = (string)($data['kind'] ?? '');
             $cipher = (string)($data['ciphertext'] ?? '');
             $iv = (string)($data['iv'] ?? '');
-            if (!preg_match('/^[\p{L}\p{N} _.-]{1,32}$/u', $name) ||
-                !in_array($kind, ['text', 'image', 'video', 'audio'], true) ||
-                strlen($cipher) < 20 || strlen($cipher) > 12000000 ||
-                !preg_match('/^[A-Za-z0-9+\/]+={0,2}$/D', $cipher) ||
-                !preg_match('/^[A-Za-z0-9+\/]{16}$/D', $iv)) {
-                respond(422, ['error' => 'Invalid message or attachment (maximum approximately 8 MB)']);
+            $wrapped = (string)($data['wrappedKey'] ?? '');
+            if (strlen($recipient) > 32 || !in_array($kind, ['text', 'image', 'video', 'audio'], true)
+                || strlen($cipher) < 20 || strlen($cipher) > 12000000
+                || !preg_match('/^[A-Za-z0-9+\/]+={0,2}$/D', $cipher)
+                || !preg_match('/^[A-Za-z0-9+\/]{16}$/D', $iv)
+                || strlen(base64_decode($wrapped, true) ?: '') !== 256)
+                respond(422, ['error' => 'Invalid encrypted message']);
+            $db->exec('BEGIN IMMEDIATE TRANSACTION');
+            $stmt = $db->prepare('SELECT id FROM users WHERE username = ? AND id != ? LIMIT 1');
+            $stmt->execute([$recipient, $uid]);
+            $recipientId = $stmt->fetchColumn();
+            if (!$recipientId) {
+                $db->rollBack();
+                respond(404, ['error' => 'Recipient not found']);
             }
-            $db = store();
-            $count = (int)$db->query('SELECT COUNT(*) FROM messages')->fetchColumn();
-            if ($count >= 200) respond(429, ['error' => 'Inbox is full']);
-            $stmt = $db->prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([bin2hex(random_bytes(16)), $name, session_id(), $kind, $cipher, $iv, time(), time() + 86400]);
+            $stmt = $db->prepare('SELECT COUNT(*) FROM private_messages WHERE recipient_id = ?');
+            $stmt->execute([$recipientId]);
+            if ((int)$stmt->fetchColumn() >= 200) {
+                $db->rollBack();
+                respond(429, ['error' => 'Recipient inbox full']);
+            }
+            $stmt = $db->prepare('INSERT INTO private_messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt->execute([bin2hex(random_bytes(16)), (string)$_SESSION['username'], $recipientId, $kind,
+                $cipher, $iv, $wrapped, time(), time() + 86400]);
+            $db->commit();
             respond(200, ['ok' => true]);
         }
         if ($action === 'open' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (string)($data['id'] ?? '');
             if (!preg_match('/^[a-f0-9]{32}$/D', $id)) respond(422, ['error' => 'Invalid message']);
-            $db = store();
             $db->exec('BEGIN IMMEDIATE TRANSACTION');
-            $stmt = $db->prepare('SELECT * FROM messages WHERE id = ? AND sender_session != ? AND expires > ?');
-            $stmt->execute([$id, session_id(), time()]);
+            $stmt = $db->prepare('SELECT * FROM private_messages WHERE id = ? AND recipient_id = ? AND expires > ?');
+            $stmt->execute([$id, $uid, time()]);
             $message = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($message) {
-                $db->prepare('DELETE FROM messages WHERE id = ?')->execute([$id]);
-            }
+            if ($message) $db->prepare('DELETE FROM private_messages WHERE id = ?')->execute([$id]);
             $db->commit();
             if (!$message) respond(410, ['error' => 'Already opened or expired']);
             respond(200, ['ciphertext' => $message['ciphertext'], 'iv' => $message['iv'],
-                'sender' => $message['sender'], 'kind' => $message['kind']]);
+                'wrappedKey' => $message['wrapped_key'], 'sender' => $message['sender'], 'kind' => $message['kind']]);
         }
     } catch (Throwable $e) {
+        if (isset($db) && $db->inTransaction()) $db->rollBack();
         error_log('eCrypt storage error: ' . $e->getMessage());
         respond(503, ['error' => 'Chat storage unavailable']);
     }
