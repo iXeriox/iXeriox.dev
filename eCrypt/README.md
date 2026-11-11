@@ -1,36 +1,35 @@
-# eCrypt — private read-once chat
+# eCrypt — individual encrypted one-time messages
 
-Standalone PHP/SQLite encrypted inbox at `/eCrypt/` matching the iXeriox.dev theme.
+eCrypt is a standalone PHP 8.1+/SQLite messaging application at `/eCrypt/`, with separate per-user passwords and browser-side encryption phrases.
 
-## Quick start
+## Initial deployment
 
-Requirements: PHP 8.1+, `pdo_sqlite`, HTTPS, and a directory writable by the PHP web-server account.
-
-From the deployed website repository, run:
+Requires PHP 8.1+, PDO SQLite, HTTPS and writable private storage. From the deployed repository:
 
 ```bash
 php eCrypt/setup.php
 ```
 
-The setup script generates a random room access password (printed **once**), a stable encryption salt, and SQLite storage. It stores configuration in `../ecrypt-private/config.json` relative to the **website root** (specifically, two directories above `eCrypt/setup.php`). The folder is outside the public website tree. Do not commit or publish it.
+The script initializes `/iXeriox.dev/ecrypt-private/` for a deployment rooted at `/iXeriox.dev/www`. Ensure the PHP worker can read `config.json` and write `messages.sqlite` and its parent directory. Never publish the private folder.
 
-**Permissions:** Run setup as the account that executes PHP for your website, or set secure ownership/permissions so that account can read `config.json` and write `messages.sqlite` and its parent directory. SQLite needs directory write access for its transaction journal. If you deploy with a repository nested in another folder, check that the derived directory really is outside your configured document root.
+**The password printed by setup is the room invitation password**, not any user's access password. Share the invitation password only with approved new users. If it has been disclosed, rotate the password hash in the private config before giving it to new users. Existing user access passwords are independent of this invite.
 
-Visit `https://ixeriox.dev/eCrypt/`. Enter the generated access password, plus a **different**, strong encryption phrase shared privately with all participants. The encryption phrase is never sent to the server. Use two distinct browsers/devices to test sending and opening.
+## Each user's registration and login
 
-Running setup again does not overwrite existing credentials or messages. To use centrally managed credentials instead, you can set `ECRYPT_PASSWORD_HASH`, `ECRYPT_KDF_SALT` and `ECRYPT_DB_PATH` in your PHP server environment; those take priority over the generated config. Never change the salt after messages have been sent.
+1. Select **Create account**. Enter a unique username, a personal access password (12+ characters), a different personal encryption phrase (12+ characters), and the room invitation password.
+2. The browser generates a new RSA-OAEP keypair. The private key is encrypted locally using a key derived from that person's phrase (PBKDF2-SHA256 with 310,000 iterations and a per-user random salt). The server saves only the public key, encrypted private key, and password hash.
+3. For later logins select **Log in**, enter the same username, their access password, and their own encryption phrase. The browser decrypts their key locally. Other users have different credentials and phrases.
+4. Enter another registered username in **Send to**, and send text/media/voice. The sender generates a random AES-256-GCM message key and encrypts it to the recipient's RSA public key. The recipient decrypts with their own private key. Users never need one another's phrases.
 
-There is intentionally **no public first-visitor installer**: an internet-facing installation must not let a stranger claim ownership first.
+If a user forgets their encryption phrase, messages encrypted to their existing private key cannot be recovered. **Do not change or delete their stored private key or encryption salt.**
 
-## Behaviour and limitations
+The original shared-room inbox messages are not transferred to individual accounts; the legacy `messages` table is intentionally retained to prevent accidental destruction, but old messages are not displayed by the new per-user inbox.
 
-- Browser-side AES-256-GCM with PBKDF2-SHA256 (310,000 iterations).
-- Text, photos, video, audio and voice messages, with a 6 MiB attachment upload limit.
-- Messages are visible in other browser sessions; the inbox refreshes every 3.5 seconds.
-- The first successful open request deletes the encrypted message from SQLite before delivering it. Decryption errors or interrupted playback cannot be undone.
-- Undelivered messages expire after 24 hours on the next API request.
-- This is a shared inbox, **not** user-to-user messaging or independently verified participant identity.
+## Notes
 
-## Security
-
-This is not a security-audited messenger. Use HTTPS, restrict direct origin access behind Cloudflare if relying on its HTTPS headers, and configure proxy/WAF rate-limiting for login. Avoid caching or backing up encrypted messages if strict ephemeral retention is needed. Anyone with both secrets can enter the room; distribute them securely. The app cannot prevent screenshots, recordings, recipient copies, or compromise of browser-served JavaScript.
+- Each message is delivered to one named recipient. The first successful open API call atomically removes ciphertext from SQLite **before decryption**.
+- Undelivered messages expire after 24 hours on the next API use.
+- Max file attachment: 6 MiB. Recipients must have an account first.
+- For safety, the registration invitation is required: the first public visitor cannot take ownership of an uninitialised server.
+- Keep Cloudflare/WAF IP-based login and registration rate limits; per-session throttling alone is insufficient. Use HTTPS and restrict origin reachability when trusting proxy-provided HTTPS headers.
+- This is **not a security-audited system**. The server supplies public keys and browser JavaScript, so a malicious or compromised server can impersonate key owners or alter the client. There is no cryptographic identity verification, key transparency or forward secrecy. Avoid using it for high-risk secrets. Read-once does not prevent recipients from copying, recording or retaining plaintext.
