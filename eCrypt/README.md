@@ -1,43 +1,36 @@
 # eCrypt — private read-once chat
 
-A standalone PHP/SQLite encrypted inbox at `/eCrypt/`, visually matched to the iXeriox.dev dark terminal theme.
+Standalone PHP/SQLite encrypted inbox at `/eCrypt/` matching the iXeriox.dev theme.
 
-## Server setup (required)
+## Quick start
 
-1. Ensure PHP 8.1+, PDO SQLite, HTTPS and a writable directory **outside** your public document root.
-2. Generate an access-password hash on your server (do **not** commit the password or hash):
-   ```bash
-   php -r 'echo password_hash(readline("Access password: "), PASSWORD_DEFAULT), PHP_EOL;'
-   ```
-3. Generate a random stable encryption salt (keep this **unchanged** after users begin sending messages):
-   ```bash
-   php -r 'echo base64_encode(random_bytes(16)), PHP_EOL;'
-   ```
-4. Configure these server-side environment variables in Apache/PHP-FPM or a protected server configuration:
-   ```
-   ECRYPT_PASSWORD_HASH=<hash from step 2>
-   ECRYPT_KDF_SALT=<base64 from step 3>
-   ECRYPT_DB_PATH=/var/lib/ecrypt/messages.sqlite
-   ```
-   Ensure `/var/lib/ecrypt` exists and the web-server user can write it. Never place the DB under the served website, and never put credentials into Git.
-5. Deploy `eCrypt/` under your existing site and visit `https://ixeriox.dev/eCrypt/`. Confirm HTTPS is correctly detected by PHP. For proxy deployments, only trust Cloudflare headers if your origin is reachable *exclusively* through Cloudflare.
-6. Share the access password and a **different** strong encryption phrase privately with the intended participants. The encryption phrase is used only in the browser. Anyone who has both secrets can participate in the room. Use separate browsers/devices or separate browser sessions for sender and recipient.
+Requirements: PHP 8.1+, `pdo_sqlite`, HTTPS, and a directory writable by the PHP web-server account.
 
-## Behaviour
+From the deployed website repository, run:
 
-- AES-256-GCM encryption in the browser, with a key derived using PBKDF2-SHA256 (310k iterations).
-- Text, audio, images, videos and voice notes. Mobile-friendly touch controls, 16px inputs to avoid iOS zoom, and separate photo/video/audio pickers. Attachments up to 6 MiB (limited for encrypted JSON/base64 overhead and mobile reliability).
-- Messages are only visible to other browser sessions. Refresh the recipient inbox to see messages (auto refresh every 3.5 seconds).
-- One-time retrieval is enforced with a SQLite write transaction: the first successful open request deletes the ciphertext before responding.
-- Undelivered messages expire after 24 hours **when the API is next used**. They are not immediately removed at the exact expiration time.
-- No user accounts: this is a **shared inbox** with names entered by users, not user-to-user private messaging.
-- A second participant must know the encryption phrase. An incorrect phrase causes an opened message to be irretrievably consumed.
-- A message is removed server-side on opening, not after confirmed viewing or full media playback.
+```bash
+php eCrypt/setup.php
+```
 
-## Security notes
+The setup script generates a random room access password (printed **once**), a stable encryption salt, and SQLite storage. It stores configuration in `../ecrypt-private/config.json` relative to the **website root** (specifically, two directories above `eCrypt/setup.php`). The folder is outside the public website tree. Do not commit or publish it.
 
-This is an initial implementation, **not a security-audited messenger**. Do not depend on it for high-risk secrets until it has had proper testing and review. A compromised server can alter the JavaScript served to browsers. In particular, it does not provide cryptographic participant identity verification or forward secrecy. Shared access and encryption secrets must be securely distributed and rotated if compromised.
+**Permissions:** Run setup as the account that executes PHP for your website, or set secure ownership/permissions so that account can read `config.json` and write `messages.sqlite` and its parent directory. SQLite needs directory write access for its transaction journal. If you deploy with a repository nested in another folder, check that the derived directory really is outside your configured document root.
 
-The app cannot prevent screenshots, screen recordings, browser caches, copies made by recipients, logs held by infrastructure, or database/backups created before deletion. Configure your infrastructure to avoid caching responses under `/eCrypt/`, and prevent database backups from retaining messages if strict ephemeral retention is required. The server gets the room access password at login but **does not** receive the separate encryption phrase. The access password is verified with a server-side password hash.
+Visit `https://ixeriox.dev/eCrypt/`. Enter the generated access password, plus a **different**, strong encryption phrase shared privately with all participants. The encryption phrase is never sent to the server. Use two distinct browsers/devices to test sending and opening.
 
-Authentication brute-force controls are session-local. For internet-facing deployments add Cloudflare/WAF or reverse-proxy IP-based rate limiting at `/eCrypt/index.php?action=login`, ensure TLS termination is secure, and test the access-control and message-delete paths before production use.
+Running setup again does not overwrite existing credentials or messages. To use centrally managed credentials instead, you can set `ECRYPT_PASSWORD_HASH`, `ECRYPT_KDF_SALT` and `ECRYPT_DB_PATH` in your PHP server environment; those take priority over the generated config. Never change the salt after messages have been sent.
+
+There is intentionally **no public first-visitor installer**: an internet-facing installation must not let a stranger claim ownership first.
+
+## Behaviour and limitations
+
+- Browser-side AES-256-GCM with PBKDF2-SHA256 (310,000 iterations).
+- Text, photos, video, audio and voice messages, with a 6 MiB attachment upload limit.
+- Messages are visible in other browser sessions; the inbox refreshes every 3.5 seconds.
+- The first successful open request deletes the encrypted message from SQLite before delivering it. Decryption errors or interrupted playback cannot be undone.
+- Undelivered messages expire after 24 hours on the next API request.
+- This is a shared inbox, **not** user-to-user messaging or independently verified participant identity.
+
+## Security
+
+This is not a security-audited messenger. Use HTTPS, restrict direct origin access behind Cloudflare if relying on its HTTPS headers, and configure proxy/WAF rate-limiting for login. Avoid caching or backing up encrypted messages if strict ephemeral retention is needed. Anyone with both secrets can enter the room; distribute them securely. The app cannot prevent screenshots, recordings, recipient copies, or compromise of browser-served JavaScript.
