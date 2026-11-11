@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * eCrypt: private, single-consumption encrypted inbox.
- * Requires ECRYPT_PASSWORD_HASH, ECRYPT_KDF_SALT and ECRYPT_DB_PATH.
+ * Run php eCrypt/setup.php once, or supply the ECRYPT_* environment variables.
  */
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
@@ -37,11 +37,36 @@ function respond(int $status, array $data): never {
     echo json_encode($data, JSON_THROW_ON_ERROR);
     exit;
 }
+/**
+ * Explicit environment settings take precedence; otherwise use the private
+ * file created by "php eCrypt/setup.php". The directory is a sibling of the
+ * website directory, never inside the served eCrypt tree.
+ */
+function settings(): array {
+    static $settings = null;
+    if ($settings !== null) return $settings;
+    $file = dirname(__DIR__, 2) . '/ecrypt-private/config.json';
+    $saved = [];
+    if (is_file($file)) {
+        $raw = file_get_contents($file);
+        $decoded = $raw === false ? null : json_decode($raw, true);
+        if (is_array($decoded)) $saved = $decoded;
+    }
+    $settings = [
+        'password_hash' => getenv('ECRYPT_PASSWORD_HASH') ?: ($saved['password_hash'] ?? ''),
+        'salt' => settings()['salt'] ?: ($saved['salt'] ?? ''),
+        'db_path' => getenv('ECRYPT_DB_PATH') ?: ($saved['db_path'] ?? ''),
+    ];
+    return $settings;
+}
 function configured(): bool {
-    return (bool)(getenv('ECRYPT_PASSWORD_HASH') && getenv('ECRYPT_KDF_SALT') && getenv('ECRYPT_DB_PATH'));
+    $s = settings();
+    return is_string($s['password_hash']) && $s['password_hash'] !== ''
+        && is_string($s['salt']) && strlen(base64_decode($s['salt'], true) ?: '') >= 16
+        && is_string($s['db_path']) && $s['db_path'] !== '';
 }
 function store(): PDO {
-    $path = (string)getenv('ECRYPT_DB_PATH');
+    $path = (string)settings()['db_path'];
     if (!$path || !str_starts_with($path, '/') || str_contains($path, "\0")) {
         throw new RuntimeException('ECRYPT_DB_PATH must be an absolute path outside the web root');
     }
@@ -89,7 +114,7 @@ if ($action !== '') {
     if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!limitedAttempts()) respond(429, ['error' => 'Too many attempts. Try again later.']);
         $password = (string)($data['password'] ?? '');
-        $hash = (string)getenv('ECRYPT_PASSWORD_HASH');
+        $hash = (string)settings()['password_hash'];
         if (strlen($password) > 256 || !password_verify($password, $hash)) {
             $_SESSION['attempts'][] = time();
             respond(401, ['error' => 'Incorrect access password']);
@@ -102,7 +127,7 @@ if ($action !== '') {
     }
     if ($action === 'status' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         respond(200, ['ok' => !empty($_SESSION['allowed']), 'csrf' => $_SESSION['csrf'],
-            'salt' => !empty($_SESSION['allowed']) ? getenv('ECRYPT_KDF_SALT') : null]);
+            'salt' => !empty($_SESSION['allowed']) ? settings()['salt'] : null]);
     }
     if ($action === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION = [];
