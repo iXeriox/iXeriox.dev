@@ -343,16 +343,24 @@ input[type="file"]::file-selector-button{font:inherit;color:var(--cyan);backgrou
 <header><div class="logo">iX<b>eriox</b> / <span style="color:var(--cyan)">eCrypt</span></div><a href="/">← back to site</a></header>
 <div class="card">
 <h1><span>./</span> eCrypt</h1>
-<p>Private, encrypted, one-time chat. Text, pictures, videos and voice notes disappear from the server as soon as somebody opens them.</p>
+<p>Private, encrypted, one-time messages. Each account uses its own password and encryption phrase. Send privately to another registered user.</p>
 <div id="login">
-<label for="access">Access password</label><input id="access" type="password" autocomplete="off" placeholder="Private room access">
-<label for="phrase">Encryption phrase (never sent to the server)</label><input id="phrase" type="password" autocomplete="off" placeholder="Shared secret with the other participant">
-<p><small>Everyone in this room must use the same encryption phrase to read messages. Choose a separate, strong phrase from your access password.</small></p>
-<button class="primary" id="unlock" disabled>Unlock private room →</button>
+<div class="row"><button id="showLogin" type="button" class="primary">Log in</button><button id="showRegister" type="button">Create account</button></div>
+<label for="username">Username</label><input id="username" maxlength="32" autocomplete="username" placeholder="Your username">
+<label for="access">Your access password</label><input id="access" type="password" autocomplete="current-password" placeholder="Your personal sign-in password">
+<label for="phrase">Your personal encryption phrase</label><input id="phrase" type="password" autocomplete="off" placeholder="Only you know this phrase">
+<div id="registerExtra" class="hidden">
+<label for="invite">Room invitation password</label><input id="invite" type="password" autocomplete="off" placeholder="Invite supplied by room owner">
+<p><small>Your encryption phrase protects your private key. If you forget it, previously received encrypted messages cannot be recovered. Choose a different phrase from your access password.</small></p>
+</div>
+<p><small>Access passwords and encryption phrases are personal. The encryption phrase never leaves this browser. Each recipient's public key is used when sending messages.</small></p>
+<button class="primary" id="unlock" disabled>Log in securely</button>
 </div>
 <div id="chat" class="hidden">
 <div class="row" style="justify-content:space-between"><div class="tag">● ENCRYPTION ACTIVE · READ ONCE</div><button class="danger" id="logout">Lock room</button></div>
-<label for="nickname">Display name</label><input id="nickname" maxlength="32" placeholder="Your name">
+<div class="tag" id="accountName"></div>
+<label for="recipient">Send to</label><input id="recipient" list="knownUsers" placeholder="Recipient's username" autocomplete="off"><datalist id="knownUsers"></datalist>
+<button id="refreshUsers" type="button">Refresh users</button>
 <h2>./ incoming</h2>
 <div id="inbox" class="inbox"><small>Checking encrypted inbox…</small></div>
 <div id="opened" class="hidden">
@@ -369,7 +377,7 @@ input[type="file"]::file-selector-button{font:inherit;color:var(--cyan);backgrou
 <small id="selectedFile" aria-live="polite">No attachment selected</small>
 <div class="row" style="margin-top:12px"><button id="sendFile">Encrypt &amp; send attachment</button><small id="recordState"></small></div>
 </div>
-<div class="note">Read-once means the first successful server retrieval permanently consumes the message, even if decryption or playback fails. Messages not opened expire after 24 hours. This cannot prevent screenshots, recordings, browser caches, server backups, or copies made before deletion. This is a shared inbox, not individual direct messages.</div>
+<div class="note">Read-once means the first successful retrieval permanently consumes the message, even if decryption or playback fails. Unopened messages expire after 24 hours. Each user has a personal encrypted inbox; no private key or phrase is sent to the server. This cannot prevent screenshots, recordings, backups or copies made by recipients.</div>
 <div id="status" role="status" aria-live="polite"></div>
 </div>
 </main>
@@ -378,64 +386,105 @@ input[type="file"]::file-selector-button{font:inherit;color:var(--cyan);backgrou
 'use strict';
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-let key = null, csrf = '', salt = '', polling = null, recorder = null, chunks = [], currentUrl = null;
+let privateKey = null, csrf = '', polling = null, recorder = null, chunks = [], currentUrl = null, registration = false;
 const b64 = bytes => { let s=''; for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s); };
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 function status(s){$('status').textContent=s;}
-async function api(action, data){
-  const post = data !== undefined;
-  const response = await fetch('./index.php?action='+action,{
+async function api(action, data, params=''){
+  const post=data!==undefined;
+  const response=await fetch('./index.php?action='+encodeURIComponent(action)+params,{
     method:post?'POST':'GET',credentials:'same-origin',
     headers:post?{'Content-Type':'application/json','X-CSRF-Token':csrf}:{},
     body:post?JSON.stringify(data):undefined,cache:'no-store'
   });
-  const value=await response.json();
+  const raw=await response.text();
+  let value;
+  try{value=JSON.parse(raw);}catch{throw Error('Server returned HTTP '+response.status+' instead of JSON');}
   if(!response.ok)throw Error(value.error||'Request failed');
   return value;
 }
-async function derive(phrase,s){
-  const base=await crypto.subtle.importKey('raw',enc.encode(phrase),'PBKDF2',false,['deriveKey']);
-  return crypto.subtle.deriveKey({name:'PBKDF2',salt:unb64(s),iterations:310000,hash:'SHA-256'},base,
+async function phraseKey(phrase,salt){
+  const material=await crypto.subtle.importKey('raw',enc.encode(phrase),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:unb64(salt),iterations:310000,hash:'SHA-256'},material,
     {name:'AES-GCM',length:256},false,['encrypt','decrypt']);
-}
-async function encrypt(bytes){
-  const iv=crypto.getRandomValues(new Uint8Array(12));
-  const ciphertext=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,bytes));
-  return {iv:b64(iv),ciphertext:b64(ciphertext)};
-}
-async function decrypt(payload){
-  return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(payload.iv)},key,unb64(payload.ciphertext)));
 }
 function clearPreview(){
   if(currentUrl){URL.revokeObjectURL(currentUrl);currentUrl=null;}
   $('preview').replaceChildren();$('opened').classList.add('hidden');
 }
+function setMode(isRegistration){
+  registration=isRegistration;
+  $('registerExtra').classList.toggle('hidden',!registration);
+  $('showRegister').classList.toggle('primary',registration);
+  $('showLogin').classList.toggle('primary',!registration);
+  $('unlock').textContent=registration?'Create secure account':'Log in securely';
+  $('access').autocomplete=registration?'new-password':'current-password';
+  status('');
+}
 async function lock(){
-  clearPreview();key=null;clearInterval(polling);polling=null;
+  clearPreview();privateKey=null;clearInterval(polling);polling=null;
+  if(recorder?.state==='recording')recorder.stop();
   try{await api('logout',{});}catch(e){}
   $('chat').classList.add('hidden');$('login').classList.remove('hidden');
-  $('access').value='';$('phrase').value='';status('Room locked.');
+  $('access').value='';$('phrase').value='';$('invite').value='';
+  status('Signed out. Your private key has been cleared from this page.');
+}
+async function register(){
+  const username=$('username').value.trim(),password=$('access').value,phrase=$('phrase').value;
+  if(!/^[a-zA-Z0-9_.-]{3,32}$/.test(username))throw Error('Username must be 3–32 letters, numbers, dots, dashes or underscores.');
+  if(password.length<12)throw Error('Access password must be at least 12 characters.');
+  if(phrase.length<12 || phrase===password)throw Error('Use a separate encryption phrase of at least 12 characters.');
+  if(!$('invite').value)throw Error('Enter the room invitation password.');
+  if(!window.isSecureContext||!crypto.subtle)throw Error('HTTPS and Web Crypto are required.');
+  status('Generating your encryption keys locally…');
+  const pair=await crypto.subtle.generateKey({name:'RSA-OAEP',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['encrypt','decrypt']);
+  const publicKey=b64(new Uint8Array(await crypto.subtle.exportKey('spki',pair.publicKey)));
+  const privateBytes=new Uint8Array(await crypto.subtle.exportKey('pkcs8',pair.privateKey));
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const wrappingKey=await phraseKey(phrase,b64(salt));
+  const encryptedPrivateKey=b64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},wrappingKey,privateBytes)));
+  privateBytes.fill(0);
+  await api('register',{username,password,invite:$('invite').value,publicKey,encryptedPrivateKey,privateIv:b64(iv),privateSalt:b64(salt)});
+  status('Account created. Signing you in…');
+  await login();
+}
+async function login(){
+  const username=$('username').value.trim(),password=$('access').value,phrase=$('phrase').value;
+  if(!username||!password||!phrase)throw Error('Enter your username, access password and encryption phrase.');
+  if(!window.isSecureContext||!crypto.subtle)throw Error('HTTPS and Web Crypto are required.');
+  const result=await api('login',{username,password});
+  csrf=result.csrf;
+  try{
+    const wrappingKey=await phraseKey(phrase,result.privateSalt);
+    const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(result.privateIv)},wrappingKey,unb64(result.encryptedPrivateKey));
+    privateKey=await crypto.subtle.importKey('pkcs8',raw,{name:'RSA-OAEP',hash:'SHA-256'},false,['decrypt']);
+  }catch(e){
+    privateKey=null;
+    await api('logout',{}).catch(()=>{});
+    throw Error('Incorrect encryption phrase. Your private messages remain protected.');
+  }
+  $('access').value='';$('phrase').value='';$('invite').value='';
+  $('accountName').textContent='● Signed in as '+result.username;
+  $('login').classList.add('hidden');$('chat').classList.remove('hidden');
+  status('Encryption unlocked. Your phrase is not shared with the server.');
+  await Promise.all([list(),users()]);
+  polling=setInterval(()=>{list().catch(e=>status(e.message));},3500);
 }
 async function unlock(){
-  const unlockButton=$('unlock');unlockButton.disabled=true;
-  try{
-    if(!$('access').value||!$('phrase').value)throw Error('Enter both passwords.');
-    if(!window.isSecureContext || !crypto.subtle)throw Error('HTTPS and Web Crypto are required.');
-    const result=await api('login',{password:$('access').value});
-    csrf=result.csrf;salt=result.salt;
-    const derived=await derive($('phrase').value,salt);
-    key=derived;$('access').value='';$('phrase').value='';
-    $('login').classList.add('hidden');$('chat').classList.remove('hidden');
-    status('Room unlocked. Keep the encryption phrase private.');
-    await list();
-    polling=setInterval(()=>{list().catch(e=>status(e.message));},3500);
-  }catch(e){status(e.message);}finally{unlockButton.disabled=false;}
+  const button=$('unlock');button.disabled=true;
+  try{if(registration)await register();else await login();}
+  catch(e){status(e.message);}finally{button.disabled=false;}
+}
+async function users(){
+  if(!privateKey)return;
+  const result=await api('users'),list=$('knownUsers');list.replaceChildren();
+  for(const username of result.users){const option=document.createElement('option');option.value=username;list.append(option);}
 }
 async function list(){
-  if(!key)return;
-  const data=await api('list');const box=$('inbox');box.replaceChildren();
-  if(!data.messages.length){const empty=document.createElement('small');empty.textContent='No unread messages.';box.append(empty);return;}
-  for(const m of data.messages){
+  if(!privateKey)return;
+  const result=await api('list'),box=$('inbox');box.replaceChildren();
+  if(!result.messages.length){const empty=document.createElement('small');empty.textContent='No unread messages.';box.append(empty);return;}
+  for(const m of result.messages){
     const row=document.createElement('div');row.className='message';
     const meta=document.createElement('div'),strong=document.createElement('strong'),sub=document.createElement('small');
     strong.textContent=m.sender+' · '+m.kind;sub.textContent=new Date(Number(m.created)*1000).toLocaleString();
@@ -448,29 +497,51 @@ async function openMessage(id,button){
   button.disabled=true;clearPreview();
   try{
     const data=await api('open',{id});
-    const bytes=await decrypt(data);
+    const aesBytes=await crypto.subtle.decrypt({name:'RSA-OAEP'},privateKey,unb64(data.wrappedKey));
+    const aes=await crypto.subtle.importKey('raw',aesBytes,{name:'AES-GCM'},false,['decrypt']);
+    const bytes=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(data.iv)},aes,unb64(data.ciphertext)));
     const out=$('preview');out.replaceChildren();
     if(data.kind==='text'){const p=document.createElement('p');p.style.whiteSpace='pre-wrap';p.textContent=dec.decode(bytes);out.append(p);}
-    else {
+    else{
       const wrapper=JSON.parse(dec.decode(bytes));
-      if(!wrapper || !['image','video','audio'].includes(wrapper.kind) || typeof wrapper.mime!=='string' || !wrapper.mime.startsWith(wrapper.kind+'/'))throw Error('Invalid attachment format');
+      if(!wrapper||!['image','video','audio'].includes(wrapper.kind)||wrapper.kind!==data.kind||typeof wrapper.mime!=='string'||!wrapper.mime.startsWith(wrapper.kind+'/'))throw Error('Invalid attachment format');
       const binary=unb64(wrapper.body);
       if(binary.byteLength>8*1024*1024)throw Error('Attachment too large');
-      const mediaBlob=new Blob([binary],{type:wrapper.mime});currentUrl=URL.createObjectURL(mediaBlob);
+      currentUrl=URL.createObjectURL(new Blob([binary],{type:wrapper.mime}));
       const el=document.createElement(wrapper.kind==='image'?'img':wrapper.kind==='video'?'video':'audio');
-      el.src=currentUrl;if(el.tagName!=='IMG'){el.controls=true;el.playsInline=true;}el.alt='One-time attachment';out.append(el);
+      el.src=currentUrl;if(el.tagName!=='IMG'){el.controls=true;el.playsInline=true;}else el.alt='One-time attachment';
+      out.append(el);
     }
-    $('opened').classList.remove('hidden');$('opened').scrollIntoView({behavior:'smooth',block:'start'});status('Message consumed and deleted from server.');list().catch(()=>{});
+    $('opened').classList.remove('hidden');$('opened').scrollIntoView({behavior:'smooth',block:'start'});
+    status('Message opened and removed from server.');list().catch(()=>{});
   }catch(e){status('Message consumed/unavailable: '+e.message);await list().catch(()=>{});}
 }
 async function send(kind,bytes){
-  const name=$('nickname').value.trim();
-  if(!/^[\p{L}\p{N} _.-]{1,32}$/u.test(name))throw Error('Enter a display name (1–32 letters/numbers).');
-  if(!key)throw Error('Room locked');
-  const payload=await encrypt(bytes);
-  await api('send',{sender:name,kind,...payload});status('Encrypted item queued for one-time opening.');
+  if(!privateKey)throw Error('Sign in first');
+  const recipient=$('recipient').value.trim();
+  if(!recipient)throw Error('Choose a recipient.');
+  const info=await api('recipient',undefined,'&username='+encodeURIComponent(recipient));
+  const publicKey=await crypto.subtle.importKey('spki',unb64(info.publicKey),{name:'RSA-OAEP',hash:'SHA-256'},false,['encrypt']);
+  const aesBytes=crypto.getRandomValues(new Uint8Array(32));
+  const wrappedKey=b64(new Uint8Array(await crypto.subtle.encrypt({name:'RSA-OAEP'},publicKey,aesBytes)));
+  const aes=await crypto.subtle.importKey('raw',aesBytes,{name:'AES-GCM'},false,['encrypt']);
+  aesBytes.fill(0);
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext=b64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},aes,bytes)));
+  await api('send',{recipient:info.username,kind,iv:b64(iv),ciphertext,wrappedKey});
+  status('Encrypted message sent to '+info.username+'.');
 }
+async function sendAttachment(file){
+  if(!file||file.size>6*1024*1024||!file.size)throw Error('Choose a file under 6 MB.');
+  const kind=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
+  if(!kind)throw Error('Only image, video and audio attachments are supported.');
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  await send(kind,enc.encode(JSON.stringify({kind,mime:file.type,body:b64(bytes)})));
+}
+$('showRegister').addEventListener('click',()=>setMode(true));
+$('showLogin').addEventListener('click',()=>setMode(false));
 $('unlock').addEventListener('click',unlock);$('logout').addEventListener('click',lock);
+$('refreshUsers').addEventListener('click',()=>users().catch(e=>status(e.message)));
 $('closePreview').addEventListener('click',clearPreview);
 $('sendText').addEventListener('click',async()=>{
   const btn=$('sendText');btn.disabled=true;
@@ -478,14 +549,6 @@ $('sendText').addEventListener('click',async()=>{
     await send('text',enc.encode(text));$('message').value='';
   }catch(e){status(e.message);}finally{btn.disabled=false;}
 });
-async function sendAttachment(file){
-  if(!file || file.size>6*1024*1024 || !file.size)throw Error('Choose a file under 6 MB.');
-  const kind=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':file.type.startsWith('audio/')?'audio':null;
-  if(!kind)throw Error('Only image, video and audio attachments are supported.');
-  const bytes=new Uint8Array(await file.arrayBuffer());
-  const payload={kind,mime:file.type,body:b64(bytes)};
-  await send(kind,enc.encode(JSON.stringify(payload)));
-}
 $('sendFile').addEventListener('click',async()=>{
   const btn=$('sendFile');btn.disabled=true;
   try{await sendAttachment($('attachment').files[0]);$('attachment').value='';$('selectedFile').textContent='No attachment selected';}
@@ -496,7 +559,7 @@ $('pickImage').addEventListener('click',()=>chooseFile('image/*'));
 $('pickVideo').addEventListener('click',()=>chooseFile('video/*'));
 $('pickAudio').addEventListener('click',()=>chooseFile('audio/*'));
 $('attachment').addEventListener('change',()=>{
- const file=$('attachment').files[0];$('selectedFile').textContent=file?file.name+' · '+(file.size/1048576).toFixed(1)+' MB':'No attachment selected';
+  const file=$('attachment').files[0];$('selectedFile').textContent=file?file.name+' · '+(file.size/1048576).toFixed(1)+' MB':'No attachment selected';
 });
 $('record').addEventListener('click',async()=>{
   try{
@@ -518,8 +581,10 @@ $('record').addEventListener('click',async()=>{
   }catch(e){status(e.message);}
 });
 window.addEventListener('pagehide',clearPreview);
-api('status').then(r=>{csrf=r.csrf;$('unlock').disabled=false;if(r.ok)status('Session active. Re-enter access password and encryption phrase to unlock.');})
-.catch(()=>status('Server requires configuration or is unavailable.'));
+api('status').then(r=>{
+  csrf=r.csrf;$('unlock').disabled=false;
+  if(r.ok)status('Session active. Enter your password and personal encryption phrase to unlock your private key.');
+}).catch(e=>status('Server configuration error: '+e.message));
 })();
 </script>
 </body>
