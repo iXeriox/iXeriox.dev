@@ -45,7 +45,7 @@ function respond(int $status, array $data): never {
 function settings(): array {
     static $settings = null;
     if ($settings !== null) return $settings;
-    $file = dirname(__DIR__) . '/ecrypt-private/config.json';
+    $file = dirname(__DIR__, 2) . '/ecrypt-private/config.json';
     $saved = [];
     if (is_file($file)) {
         $raw = file_get_contents($file);
