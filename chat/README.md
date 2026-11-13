@@ -121,6 +121,6 @@ Both website and V2 updates are required for this confirmation protocol.
 
 ## Missed messages (`/last`)
 
-Type `/last` in a room after reconnecting to display messages sent while you were disconnected. The server retains replay messages for up to one hour and checks the authenticated user, current room membership and permissions before replaying. Replay is limited to actual disconnect-and-rejoin windows after a previous join; first-time visitors cannot fetch older messages. Explicitly leaving a room clears replay eligibility. Replayed messages are marked **Missed** in the client. Normal join and login responses do not deliver older chat history.
+Type `/last` in a room after reconnecting to display messages sent while you were disconnected. The server retains replay messages for up to one hour and checks the authenticated user, current room membership and permissions before replaying. Replay is limited to actual disconnect-and-rejoin windows after a previous join; first-time visitors cannot fetch older messages. Explicitly leaving a room starts a missed-message interval, just like losing the connection. Messages remain restricted to previously joined rooms and current room permissions. Replayed messages are marked **Missed** in the client. Normal join and login responses do not deliver older chat history.
 
 The replay buffer and membership windows are held in V2 process memory, so restarting the server clears pending replay data. Backend tests: `node --test tests/missed-messages.test.js`.
