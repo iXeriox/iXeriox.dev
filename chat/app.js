@@ -2482,7 +2482,7 @@ createApp({
                     user: isSystem
                         ? "system"
                         : (data.senderInfo?.displayName || data.senderInfo?.id || data.senderId || "Unknown"),
-                    message: data.content || "",
+                    message: data.missed === true ? `↳ Missed · ${data.content || ""}` : (data.content || ""),
                     // Preserve the exact server value so typed system messages
                     // are routed to the correct client destination.
                     ...(receivedType !== undefined ? { type: receivedType } : {}),
